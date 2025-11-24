@@ -264,6 +264,8 @@ class TelegramService:
     
     async def submit_code(self, session_id: str, code: str) -> Dict[str, Any]:
         """Submit authentication code for a session."""
+        import time
+        
         session = self.sessions.get(session_id)
         if not session:
             raise ValueError(f"Session {session_id} not found")
@@ -279,33 +281,42 @@ class TelegramService:
             # Send the authentication code
             client.send_code(code)
             
-            # Wait for state change event
-            result = await session.wait_for_state_change(timeout=10.0)
-            if result is None:
-                # Fallback to polling if event wasn't received
+            # Poll for state change after code submission
+            for _ in range(10):
+                time.sleep(1)
                 result_obj = client.get_authorization_state()
                 result_obj.wait(timeout=5)
                 result = result_obj.update
+                session._authorization_state = result
+                
+                state_type = result.get("@type") if result else None
+                
+                if state_type == "authorizationStateWaitPassword":
+                    return {
+                        "status": "awaiting_password",
+                        "message": "Two-factor authentication password required",
+                    }
+                elif state_type == "authorizationStateReady":
+                    session.is_authorized = True
+                    return {
+                        "status": "authorized",
+                        "message": "Successfully authorized",
+                    }
+                elif state_type == "authorizationStateWaitCode":
+                    # Code might be wrong or still processing, continue polling
+                    continue
+                elif state_type in ["authorizationStateClosed", "authorizationStateClosing"]:
+                    return {
+                        "status": "error",
+                        "message": "Session was closed",
+                    }
             
-            session._authorization_state = result
-            
-            if result and result.get("@type") == "authorizationStateWaitPassword":
-                return {
-                    "status": "awaiting_password",
-                    "message": "Two-factor authentication password required",
-                }
-            elif result and result.get("@type") == "authorizationStateReady":
-                session.is_authorized = True
-                return {
-                    "status": "authorized",
-                    "message": "Successfully authorized",
-                }
-            else:
-                return {
-                    "status": "unknown",
-                    "message": f"Current state: {result.get('@type', 'unknown') if result else 'no_state'}",
-                    "state": result,
-                }
+            # After polling, return current state
+            return {
+                "status": "processing",
+                "message": f"Current state: {result.get('@type', 'unknown') if result else 'no_state'}",
+                "state": result,
+            }
         except Exception as e:
             return {
                 "status": "error",
@@ -314,6 +325,8 @@ class TelegramService:
     
     async def submit_password(self, session_id: str, password: str) -> Dict[str, Any]:
         """Submit 2FA password for a session."""
+        import time
+        
         session = self.sessions.get(session_id)
         if not session:
             raise ValueError(f"Session {session_id} not found")
@@ -328,28 +341,37 @@ class TelegramService:
             # Send the 2FA password
             client.send_password(password)
             
-            # Wait for state change event
-            result = await session.wait_for_state_change(timeout=10.0)
-            if result is None:
-                # Fallback to polling if event wasn't received
+            # Poll for state change after password submission
+            for _ in range(10):
+                time.sleep(1)
                 result_obj = client.get_authorization_state()
                 result_obj.wait(timeout=5)
                 result = result_obj.update
+                session._authorization_state = result
+                
+                state_type = result.get("@type") if result else None
+                
+                if state_type == "authorizationStateReady":
+                    session.is_authorized = True
+                    return {
+                        "status": "authorized",
+                        "message": "Successfully authorized with 2FA",
+                    }
+                elif state_type == "authorizationStateWaitPassword":
+                    # Password might be wrong, continue polling briefly
+                    continue
+                elif state_type in ["authorizationStateClosed", "authorizationStateClosing"]:
+                    return {
+                        "status": "error",
+                        "message": "Session was closed (possibly wrong password)",
+                    }
             
-            session._authorization_state = result
-            
-            if result and result.get("@type") == "authorizationStateReady":
-                session.is_authorized = True
-                return {
-                    "status": "authorized",
-                    "message": "Successfully authorized with 2FA",
-                }
-            else:
-                return {
-                    "status": "unknown",
-                    "message": f"Current state: {result.get('@type', 'unknown') if result else 'no_state'}",
-                    "state": result,
-                }
+            # After polling, return current state
+            return {
+                "status": "processing",
+                "message": f"Current state: {result.get('@type', 'unknown') if result else 'no_state'}",
+                "state": result,
+            }
         except Exception as e:
             return {
                 "status": "error",
