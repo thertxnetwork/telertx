@@ -49,7 +49,13 @@ If you encounter import errors when starting the server (especially with uvicorn
    python startup_check.py
    ```
 
-2. **Verify TDLib is installed**: The `python-telegram` library requires TDLib. On most systems:
+2. **Missing pkg_resources error**: If you see `No module named 'pkg_resources'`:
+   ```bash
+   pip install setuptools>=65.0.0
+   pip install --force-reinstall python-telegram
+   ```
+
+3. **Verify TDLib is installed**: The `python-telegram` library requires TDLib. On most systems:
    ```bash
    # Ubuntu/Debian
    sudo apt-get install libtdjson1.8.0
@@ -60,12 +66,12 @@ If you encounter import errors when starting the server (especially with uvicorn
    # Or install from source: https://github.com/tdlib/td
    ```
 
-3. **Test import directly**:
+4. **Test import directly**:
    ```bash
    python -c "from telegram.client import Telegram; print('OK')"
    ```
 
-4. **Check Python version**: Ensure you're using Python 3.8+
+5. **Check Python version**: Ensure you're using Python 3.8+
    ```bash
    python --version
    ```

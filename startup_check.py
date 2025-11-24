@@ -9,16 +9,25 @@ def check_telegram_dependencies():
         from telegram.client import Telegram
         return True, None
     except ImportError as e:
-        return False, (
-            "Failed to import telegram.client. "
-            "Please install: pip install python-telegram\n"
-            f"Error: {e}"
-        )
+        error_str = str(e)
+        if "pkg_resources" in error_str:
+            return False, (
+                "Missing 'pkg_resources' module (part of setuptools).\n"
+                "   Please install: pip install setuptools>=65.0.0\n"
+                "   Then reinstall: pip install --force-reinstall python-telegram\n"
+                f"   Error: {e}"
+            )
+        else:
+            return False, (
+                "Failed to import telegram.client.\n"
+                "   Please install: pip install python-telegram\n"
+                f"   Error: {e}"
+            )
     except Exception as e:
         return False, (
-            "Error importing telegram.client. "
-            "TDLib might not be properly installed or configured.\n"
-            f"Error: {e}"
+            "Error importing telegram.client.\n"
+            "   TDLib might not be properly installed or configured.\n"
+            f"   Error: {e}"
         )
 
 
