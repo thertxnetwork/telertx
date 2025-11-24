@@ -1,0 +1,25 @@
+{
+  "name": "telertx",
+  "version": "1.0.0",
+  "description": "A simple Node.js CLI Telegram client with login and logout functionality",
+  "main": "index.js",
+  "type": "module",
+  "bin": {
+    "telertx": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "login": "node index.js login",
+    "logout": "node index.js logout",
+    "status": "node index.js status"
+  },
+  "keywords": ["telegram", "cli", "client", "tglib", "tdlib"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "tglib": "^2.2.1",
+    "commander": "^11.1.0",
+    "chalk": "^5.3.0",
+    "readline": "^1.3.0"
+  }
+}
