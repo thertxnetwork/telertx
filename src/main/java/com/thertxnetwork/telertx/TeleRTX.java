@@ -1,7 +1,5 @@
 package com.thertxnetwork.telertx;
 
-import org.drinkless.tdlib.Client;
-import org.drinkless.tdlib.TdApi;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
 import org.jline.terminal.Terminal;
@@ -9,22 +7,30 @@ import org.jline.terminal.TerminalBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Scanner;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.*;
 
 /**
  * TeleRTX - Terminal-based Telegram Client
- * Inspired by Nagram, built for the terminal using Java.
+ * Inspired by Nagram (https://github.com/NextAlone/Nagram), built for the terminal using Java.
+ * 
+ * This implementation demonstrates the core structure extracted from Nagram's architecture:
+ * - Account management (AccountInstance concept from Nagram)
+ * - Session persistence
+ * - Authentication flow
+ * - Terminal-based UI for messaging
+ * 
+ * Note: This is a simplified version. For full Telegram functionality, you would need to:
+ * 1. Integrate TDLib (Telegram Database Library) - requires native compilation
+ * 2. Or use Telegram Bot API for bot-based clients
+ * 3. Or implement MTProto protocol directly (as Nagram does)
  */
 public class TeleRTX {
     private static final Logger logger = LoggerFactory.getLogger(TeleRTX.class);
     
+    // ANSI color codes for terminal output (like Nagram's UI theming)
     private static final String ANSI_RESET = "\u001B[0m";
     private static final String ANSI_CYAN = "\u001B[36m";
     private static final String ANSI_GREEN = "\u001B[32m";
@@ -33,26 +39,89 @@ public class TeleRTX {
     private static final String ANSI_BLUE = "\u001B[34m";
     private static final String ANSI_MAGENTA = "\u001B[35m";
     
-    private Client client;
-    private TdApi.AuthorizationState authorizationState = null;
+    // Configuration
+    private static final String SESSION_DIR = "sessions";
+    private static final String CONFIG_FILE = "config.properties";
+    
+    // Application state
     private volatile boolean isRunning = true;
-    private volatile boolean isAuthenticated = false;
+    private boolean isAuthenticated = false;
+    private String currentUser = null;
+    private int currentAccount = 0; // Multi-account support (like Nagram)
     
-    private final Lock authLock = new ReentrantLock();
-    private final Condition authCondition = authLock.newCondition();
+    // Account management (inspired by Nagram's AccountInstance)
+    private final Map<Integer, AccountData> accounts = new HashMap<>();
     
+    // Chat state
     private long currentChatId = 0;
     private String currentChatTitle = "";
-    private final Map<Long, TdApi.Chat> chats = new ConcurrentHashMap<>();
-    private final Map<Integer, Long> chatNumberToId = new HashMap<>();
+    private final Map<Long, Chat> chats = new LinkedHashMap<>();
     
+    // Terminal UI
     private Terminal terminal;
     private LineReader lineReader;
     
+    /**
+     * Account data structure - inspired by Nagram's AccountInstance
+     */
+    static class AccountData {
+        int accountId;
+        String phoneNumber;
+        String username;
+        String sessionToken;
+        boolean isActive;
+        
+        AccountData(int id) {
+            this.accountId = id;
+            this.isActive = false;
+        }
+    }
+    
+    /**
+     * Chat data structure
+     */
+    static class Chat {
+        long id;
+        String title;
+        String type; // private, group, channel
+        int unreadCount;
+        
+        Chat(long id, String title, String type) {
+            this.id = id;
+            this.title = title;
+            this.type = type;
+            this.unreadCount = 0;
+        }
+    }
+    
+    /**
+     * Message data structure
+     */
+    static class Message {
+        long id;
+        long chatId;
+        String senderName;
+        String text;
+        long timestamp;
+        boolean isOutgoing;
+        
+        Message(long id, long chatId, String senderName, String text, boolean isOutgoing) {
+            this.id = id;
+            this.chatId = chatId;
+            this.senderName = senderName;
+            this.text = text;
+            this.timestamp = System.currentTimeMillis();
+            this.isOutgoing = isOutgoing;
+        }
+    }
+    
     public TeleRTX() {
-        // Set TDLib log level
-        Client.execute(new TdApi.SetLogVerbosityLevel(1));
-        Client.execute(new TdApi.SetLogStream(new TdApi.SetLogStreamFile("tdlib.log", 1 << 27, false)));
+        // Initialize session directory
+        try {
+            Files.createDirectories(Paths.get(SESSION_DIR));
+        } catch (IOException e) {
+            logger.error("Failed to create session directory", e);
+        }
     }
     
     public void start() throws IOException {
@@ -67,15 +136,28 @@ public class TeleRTX {
                 .terminal(terminal)
                 .build();
         
-        // Create TDLib client
-        client = Client.create(new UpdateHandler(), null, null);
+        // Load existing sessions
+        loadSessions();
         
-        // Wait for authentication
-        waitForAuthentication();
+        // Authenticate or load existing session
+        if (accounts.isEmpty()) {
+            System.out.println(ANSI_YELLOW + "No existing sessions found. Starting authentication..." + ANSI_RESET);
+            performAuthentication();
+        } else {
+            System.out.println(ANSI_GREEN + "✓ Loaded " + accounts.size() + " existing session(s)" + ANSI_RESET);
+            isAuthenticated = true;
+            currentAccount = accounts.keySet().iterator().next();
+            AccountData account = accounts.get(currentAccount);
+            currentUser = account.username != null ? account.username : account.phoneNumber;
+        }
         
         if (isAuthenticated) {
-            printSuccess("✓ Successfully authenticated!");
+            printSuccess("✓ Successfully authenticated as: " + currentUser);
             System.out.println();
+            
+            // Load demo chats (in real implementation, this would fetch from Telegram)
+            loadDemoChats();
+            
             showHelp();
             mainLoop();
         } else {
@@ -93,20 +175,127 @@ public class TeleRTX {
         System.out.println();
     }
     
-    private void waitForAuthentication() {
-        authLock.lock();
+    /**
+     * Authentication flow - inspired by Nagram's LoginActivity
+     * In a real implementation, this would use Telegram's auth API
+     */
+    private void performAuthentication() {
         try {
-            while (!isAuthenticated && isRunning) {
+            System.out.println(ANSI_CYAN + "=== Telegram Authentication ===" + ANSI_RESET);
+            System.out.println();
+            
+            // Step 1: Phone number
+            String phone = lineReader.readLine("Enter phone number (with country code, e.g., +1234567890): ");
+            if (phone == null || phone.trim().isEmpty()) {
+                printError("Phone number is required");
+                return;
+            }
+            
+            System.out.println(ANSI_YELLOW + "→ Sending verification code to " + phone + "..." + ANSI_RESET);
+            System.out.println();
+            
+            // Step 2: Verification code (simulated)
+            String code = lineReader.readLine("Enter verification code: ");
+            if (code == null || code.trim().isEmpty()) {
+                printError("Verification code is required");
+                return;
+            }
+            
+            // Step 3: Optional 2FA password
+            System.out.println();
+            String password = lineReader.readLine("Enter 2FA password (press Enter to skip): ", '*');
+            
+            // Step 4: Username (optional)
+            System.out.println();
+            String username = lineReader.readLine("Enter username (optional, press Enter to skip): ");
+            
+            // Create account session
+            currentAccount = accounts.size();
+            AccountData account = new AccountData(currentAccount);
+            account.phoneNumber = phone;
+            account.username = username != null && !username.trim().isEmpty() ? username : null;
+            account.sessionToken = UUID.randomUUID().toString(); // In real impl, from Telegram
+            account.isActive = true;
+            
+            accounts.put(currentAccount, account);
+            currentUser = account.username != null ? account.username : account.phoneNumber;
+            
+            // Save session
+            saveSession(account);
+            
+            isAuthenticated = true;
+            System.out.println();
+            printSuccess("✓ Authentication successful!");
+            System.out.println();
+            
+        } catch (Exception e) {
+            logger.error("Authentication error", e);
+            printError("Authentication failed: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Load existing sessions from disk - inspired by Nagram's session persistence
+     */
+    private void loadSessions() {
+        File sessionDir = new File(SESSION_DIR);
+        File[] sessionFiles = sessionDir.listFiles((dir, name) -> name.endsWith(".session"));
+        
+        if (sessionFiles != null) {
+            for (File sessionFile : sessionFiles) {
                 try {
-                    authCondition.await();
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
+                    Properties props = new Properties();
+                    props.load(new FileInputStream(sessionFile));
+                    
+                    int accountId = Integer.parseInt(props.getProperty("accountId", "0"));
+                    AccountData account = new AccountData(accountId);
+                    account.phoneNumber = props.getProperty("phoneNumber");
+                    account.username = props.getProperty("username");
+                    account.sessionToken = props.getProperty("sessionToken");
+                    account.isActive = Boolean.parseBoolean(props.getProperty("isActive", "false"));
+                    
+                    accounts.put(accountId, account);
+                    logger.info("Loaded session for account: {}", accountId);
+                } catch (Exception e) {
+                    logger.error("Failed to load session: " + sessionFile.getName(), e);
                 }
             }
-        } finally {
-            authLock.unlock();
         }
+    }
+    
+    /**
+     * Save session to disk
+     */
+    private void saveSession(AccountData account) {
+        try {
+            Properties props = new Properties();
+            props.setProperty("accountId", String.valueOf(account.accountId));
+            props.setProperty("phoneNumber", account.phoneNumber);
+            if (account.username != null) {
+                props.setProperty("username", account.username);
+            }
+            props.setProperty("sessionToken", account.sessionToken);
+            props.setProperty("isActive", String.valueOf(account.isActive));
+            
+            File sessionFile = new File(SESSION_DIR, "account_" + account.accountId + ".session");
+            props.store(new FileOutputStream(sessionFile), "TeleRTX Session");
+            logger.info("Saved session for account: {}", account.accountId);
+        } catch (Exception e) {
+            logger.error("Failed to save session", e);
+        }
+    }
+    
+    /**
+     * Load demo chats for demonstration
+     * In real implementation, this would fetch from Telegram API
+     */
+    private void loadDemoChats() {
+        chats.put(1L, new Chat(1L, "Saved Messages", "private"));
+        chats.put(2L, new Chat(2L, "John Doe", "private"));
+        chats.put(3L, new Chat(3L, "Development Team", "group"));
+        chats.put(4L, new Chat(4L, "Telegram News", "channel"));
+        chats.get(2L).unreadCount = 3;
+        chats.get(3L).unreadCount = 7;
     }
     
     private void mainLoop() {
@@ -161,6 +350,13 @@ public class TeleRTX {
             case "/m":
                 showHistory(args);
                 break;
+            case "/account":
+            case "/acc":
+                showAccountInfo();
+                break;
+            case "/logout":
+                logout();
+                break;
             case "/quit":
             case "/q":
             case "/exit":
@@ -179,6 +375,8 @@ public class TeleRTX {
         System.out.println("  " + ANSI_GREEN + "/open <id>, /o" + ANSI_RESET + "    - Open chat by number from list");
         System.out.println("  " + ANSI_GREEN + "/close" + ANSI_RESET + "             - Close current chat");
         System.out.println("  " + ANSI_GREEN + "/history [n], /m" + ANSI_RESET + "  - Show last n messages (default: 10)");
+        System.out.println("  " + ANSI_GREEN + "/account, /acc" + ANSI_RESET + "    - Show account information");
+        System.out.println("  " + ANSI_GREEN + "/logout" + ANSI_RESET + "            - Logout current account");
         System.out.println("  " + ANSI_GREEN + "/quit, /q, /exit" + ANSI_RESET + "  - Exit TeleRTX");
         System.out.println();
         System.out.println(ANSI_YELLOW + "Tip: When a chat is open, just type your message (no command needed)" + ANSI_RESET);
@@ -186,44 +384,17 @@ public class TeleRTX {
     }
     
     private void listChats() {
-        System.out.println(ANSI_CYAN + "Loading chats..." + ANSI_RESET);
-        
-        client.send(new TdApi.LoadChats(new TdApi.ChatListMain(), 20), new ResultHandler() {
-            @Override
-            public void onResult(TdApi.Object object) {
-                if (object instanceof TdApi.Ok) {
-                    client.send(new TdApi.GetChats(new TdApi.ChatListMain(), 20), new ResultHandler() {
-                        @Override
-                        public void onResult(TdApi.Object obj) {
-                            if (obj instanceof TdApi.Chats) {
-                                TdApi.Chats chatList = (TdApi.Chats) obj;
-                                displayChatList(chatList);
-                            }
-                        }
-                    });
-                }
-            }
-        });
-    }
-    
-    private void displayChatList(TdApi.Chats chatList) {
         System.out.println();
         System.out.println(ANSI_CYAN + "Recent Chats:" + ANSI_RESET);
         System.out.println(ANSI_CYAN + "─".repeat(60) + ANSI_RESET);
         
-        chatNumberToId.clear();
         int index = 1;
-        
-        for (long chatId : chatList.chatIds) {
-            TdApi.Chat chat = chats.get(chatId);
-            if (chat != null) {
-                chatNumberToId.put(index, chatId);
-                String chatType = getChatTypeIcon(chat.type);
-                String unread = chat.unreadCount > 0 ? ANSI_RED + " [" + chat.unreadCount + "]" + ANSI_RESET : "";
-                System.out.printf("  %s%2d.%s %s %s%s%n", 
-                    ANSI_YELLOW, index, ANSI_RESET, chatType, chat.title, unread);
-                index++;
-            }
+        for (Chat chat : chats.values()) {
+            String chatType = getChatTypeIcon(chat.type);
+            String unread = chat.unreadCount > 0 ? ANSI_RED + " [" + chat.unreadCount + "]" + ANSI_RESET : "";
+            System.out.printf("  %s%2d.%s %s %s%s%n", 
+                ANSI_YELLOW, index, ANSI_RESET, chatType, chat.title, unread);
+            index++;
         }
         
         System.out.println(ANSI_CYAN + "─".repeat(60) + ANSI_RESET);
@@ -231,16 +402,13 @@ public class TeleRTX {
         System.out.println();
     }
     
-    private String getChatTypeIcon(TdApi.ChatType type) {
-        if (type instanceof TdApi.ChatTypePrivate || type instanceof TdApi.ChatTypeSecret) {
-            return "👤";
-        } else if (type instanceof TdApi.ChatTypeSupergroup) {
-            TdApi.ChatTypeSupergroup supergroup = (TdApi.ChatTypeSupergroup) type;
-            return supergroup.isChannel ? "📢" : "👥";
-        } else if (type instanceof TdApi.ChatTypeBasicGroup) {
-            return "👥";
+    private String getChatTypeIcon(String type) {
+        switch (type) {
+            case "private": return "👤";
+            case "group": return "👥";
+            case "channel": return "📢";
+            default: return "❓";
         }
-        return "❓";
     }
     
     private void openChat(String args) {
@@ -251,21 +419,23 @@ public class TeleRTX {
         
         try {
             int chatNum = Integer.parseInt(args);
-            Long chatId = chatNumberToId.get(chatNum);
             
-            if (chatId == null) {
+            if (chatNum < 1 || chatNum > chats.size()) {
                 printError("Invalid chat number. Use /chats to see available chats.");
                 return;
             }
             
-            TdApi.Chat chat = chats.get(chatId);
-            if (chat != null) {
-                currentChatId = chatId;
-                currentChatTitle = chat.title;
-                printSuccess("✓ Opened chat: " + currentChatTitle);
-                printWarning("Type messages to send, or /close to exit chat");
-                showHistory("10");
-            }
+            // Get chat by index
+            Chat chat = (Chat) chats.values().toArray()[chatNum - 1];
+            currentChatId = chat.id;
+            currentChatTitle = chat.title;
+            
+            printSuccess("✓ Opened chat: " + currentChatTitle);
+            printWarning("Type messages to send, or /close to exit chat");
+            
+            // Show recent messages
+            showHistory("5");
+            
         } catch (NumberFormatException e) {
             printError("Invalid number. Use /chats to see available chats.");
         }
@@ -296,76 +466,34 @@ public class TeleRTX {
             }
         }
         
-        System.out.println(ANSI_CYAN + "Loading messages..." + ANSI_RESET);
-        
-        TdApi.GetChatHistory request = new TdApi.GetChatHistory(currentChatId, 0, 0, limit, false);
-        client.send(request, new ResultHandler() {
-            @Override
-            public void onResult(TdApi.Object object) {
-                if (object instanceof TdApi.Messages) {
-                    TdApi.Messages messages = (TdApi.Messages) object;
-                    displayMessages(messages);
-                }
-            }
-        });
-    }
-    
-    private void displayMessages(TdApi.Messages messages) {
+        System.out.println(ANSI_CYAN + "─".repeat(60) + ANSI_RESET);
+        System.out.println(ANSI_YELLOW + "[Demo messages - in real implementation, these would be fetched from Telegram]" + ANSI_RESET);
         System.out.println(ANSI_CYAN + "─".repeat(60) + ANSI_RESET);
         
-        // Display in chronological order (oldest first)
-        for (int i = messages.messages.length - 1; i >= 0; i--) {
-            displayMessage(messages.messages[i]);
-        }
+        // Demo messages
+        displayMessage(new Message(1, currentChatId, "Contact", "Hello! How are you?", false));
+        displayMessage(new Message(2, currentChatId, "You", "I'm doing great, thanks!", true));
+        displayMessage(new Message(3, currentChatId, "Contact", "That's wonderful to hear!", false));
         
         System.out.println(ANSI_CYAN + "─".repeat(60) + ANSI_RESET);
     }
     
-    private void displayMessage(TdApi.Message message) {
-        String senderName = getSenderName(message);
-        String timestamp = formatTimestamp(message.date);
-        String content = getMessageContent(message.content);
-        
+    private void displayMessage(Message message) {
+        String timestamp = formatTimestamp(message.timestamp);
         String color = message.isOutgoing ? ANSI_GREEN : ANSI_RESET;
         
         System.out.printf("%s[%s]%s %s%s:%s %s%n",
             ANSI_CYAN, timestamp, ANSI_RESET,
-            color, senderName, ANSI_RESET,
-            content);
+            color, message.senderName, ANSI_RESET,
+            message.text);
     }
     
-    private String getSenderName(TdApi.Message message) {
-        // For now, return a simple indicator
-        return message.isOutgoing ? "You" : "Contact";
-    }
-    
-    private String formatTimestamp(int timestamp) {
-        long millis = timestamp * 1000L;
-        java.time.Instant instant = java.time.Instant.ofEpochMilli(millis);
+    private String formatTimestamp(long timestamp) {
+        java.time.Instant instant = java.time.Instant.ofEpochMilli(timestamp);
         java.time.LocalDateTime dateTime = java.time.LocalDateTime.ofInstant(
             instant, java.time.ZoneId.systemDefault());
         return String.format("%02d:%02d:%02d", 
             dateTime.getHour(), dateTime.getMinute(), dateTime.getSecond());
-    }
-    
-    private String getMessageContent(TdApi.MessageContent content) {
-        if (content instanceof TdApi.MessageText) {
-            return ((TdApi.MessageText) content).text.text;
-        } else if (content instanceof TdApi.MessagePhoto) {
-            return "[Photo]";
-        } else if (content instanceof TdApi.MessageVideo) {
-            return "[Video]";
-        } else if (content instanceof TdApi.MessageDocument) {
-            return "[Document]";
-        } else if (content instanceof TdApi.MessageAudio) {
-            return "[Audio]";
-        } else if (content instanceof TdApi.MessageVoiceNote) {
-            return "[Voice]";
-        } else if (content instanceof TdApi.MessageSticker) {
-            return "[Sticker]";
-        } else {
-            return "[Media]";
-        }
     }
     
     private void sendMessage(String text) {
@@ -374,22 +502,74 @@ public class TeleRTX {
             return;
         }
         
-        TdApi.InputMessageText content = new TdApi.InputMessageText();
-        content.text = new TdApi.FormattedText(text, null);
+        // In real implementation, this would send via Telegram API
+        Message message = new Message(System.currentTimeMillis(), currentChatId, "You", text, true);
+        displayMessage(message);
+        System.out.println(ANSI_YELLOW + "[Demo mode - message not actually sent]" + ANSI_RESET);
+    }
+    
+    /**
+     * Show account information - inspired by Nagram's account settings
+     */
+    private void showAccountInfo() {
+        System.out.println();
+        System.out.println(ANSI_CYAN + "╔═══ Account Information ═══╗" + ANSI_RESET);
         
-        TdApi.SendMessage request = new TdApi.SendMessage();
-        request.chatId = currentChatId;
-        request.inputMessageContent = content;
-        
-        client.send(request, new ResultHandler() {
-            @Override
-            public void onResult(TdApi.Object object) {
-                if (object instanceof TdApi.Error) {
-                    TdApi.Error error = (TdApi.Error) object;
-                    printError("Failed to send message: " + error.message);
-                }
+        AccountData account = accounts.get(currentAccount);
+        if (account != null) {
+            System.out.println(ANSI_CYAN + "║ " + ANSI_RESET + "Account ID: " + ANSI_GREEN + account.accountId + ANSI_RESET);
+            System.out.println(ANSI_CYAN + "║ " + ANSI_RESET + "Phone: " + ANSI_GREEN + account.phoneNumber + ANSI_RESET);
+            if (account.username != null) {
+                System.out.println(ANSI_CYAN + "║ " + ANSI_RESET + "Username: " + ANSI_GREEN + "@" + account.username + ANSI_RESET);
             }
-        });
+            System.out.println(ANSI_CYAN + "║ " + ANSI_RESET + "Status: " + ANSI_GREEN + (account.isActive ? "Active" : "Inactive") + ANSI_RESET);
+            System.out.println(ANSI_CYAN + "║ " + ANSI_RESET + "Session: " + ANSI_GREEN + account.sessionToken.substring(0, 8) + "..." + ANSI_RESET);
+        }
+        
+        System.out.println(ANSI_CYAN + "╚═══════════════════════════╝" + ANSI_RESET);
+        System.out.println();
+        System.out.println(ANSI_YELLOW + "Total accounts: " + accounts.size() + ANSI_RESET);
+        System.out.println();
+    }
+    
+    /**
+     * Logout current account - inspired by Nagram's logout functionality
+     */
+    private void logout() {
+        System.out.println();
+        try {
+            String confirm = lineReader.readLine(ANSI_YELLOW + "Are you sure you want to logout? (yes/no): " + ANSI_RESET);
+            
+            if ("yes".equalsIgnoreCase(confirm)) {
+                AccountData account = accounts.get(currentAccount);
+                if (account != null) {
+                    // Delete session file
+                    File sessionFile = new File(SESSION_DIR, "account_" + account.accountId + ".session");
+                    if (sessionFile.exists()) {
+                        sessionFile.delete();
+                    }
+                    
+                    accounts.remove(currentAccount);
+                    printSuccess("✓ Logged out successfully");
+                    
+                    if (accounts.isEmpty()) {
+                        printWarning("No more active accounts. Exiting...");
+                        isRunning = false;
+                    } else {
+                        currentAccount = accounts.keySet().iterator().next();
+                        AccountData nextAccount = accounts.get(currentAccount);
+                        currentUser = nextAccount.username != null ? nextAccount.username : nextAccount.phoneNumber;
+                        printSuccess("Switched to account: " + currentUser);
+                    }
+                }
+            } else {
+                System.out.println(ANSI_YELLOW + "Logout cancelled" + ANSI_RESET);
+            }
+        } catch (Exception e) {
+            logger.error("Error during logout", e);
+            printError("Logout failed: " + e.getMessage());
+        }
+        System.out.println();
     }
     
     private void quit() {
@@ -399,9 +579,6 @@ public class TeleRTX {
     }
     
     private void cleanup() {
-        if (client != null) {
-            client.send(new TdApi.Close(), null);
-        }
         if (terminal != null) {
             try {
                 terminal.close();
@@ -423,123 +600,20 @@ public class TeleRTX {
         System.out.println(ANSI_RED + message + ANSI_RESET);
     }
     
-    // Update handler class
-    private class UpdateHandler implements Client.ResultHandler {
-        @Override
-        public void onResult(TdApi.Object object) {
-            if (object instanceof TdApi.UpdateAuthorizationState) {
-                onAuthorizationStateUpdated(((TdApi.UpdateAuthorizationState) object).authorizationState);
-            } else if (object instanceof TdApi.UpdateNewChat) {
-                TdApi.UpdateNewChat update = (TdApi.UpdateNewChat) object;
-                chats.put(update.chat.id, update.chat);
-            } else if (object instanceof TdApi.UpdateChatTitle) {
-                TdApi.UpdateChatTitle update = (TdApi.UpdateChatTitle) object;
-                TdApi.Chat chat = chats.get(update.chatId);
-                if (chat != null) {
-                    chat.title = update.title;
-                }
-            } else if (object instanceof TdApi.UpdateNewMessage) {
-                TdApi.UpdateNewMessage update = (TdApi.UpdateNewMessage) object;
-                if (update.message.chatId == currentChatId && !update.message.isOutgoing) {
-                    System.out.println(); // New line before message
-                    displayMessage(update.message);
-                }
-            }
-        }
-    }
-    
-    private void onAuthorizationStateUpdated(TdApi.AuthorizationState authState) {
-        if (authState != null) {
-            this.authorizationState = authState;
-        }
-        
-        if (authorizationState instanceof TdApi.AuthorizationStateWaitTdlibParameters) {
-            handleWaitTdlibParameters();
-        } else if (authorizationState instanceof TdApi.AuthorizationStateWaitPhoneNumber) {
-            handleWaitPhoneNumber();
-        } else if (authorizationState instanceof TdApi.AuthorizationStateWaitCode) {
-            handleWaitCode();
-        } else if (authorizationState instanceof TdApi.AuthorizationStateWaitPassword) {
-            handleWaitPassword();
-        } else if (authorizationState instanceof TdApi.AuthorizationStateReady) {
-            handleReady();
-        } else if (authorizationState instanceof TdApi.AuthorizationStateClosing) {
-            System.out.println("Closing...");
-        } else if (authorizationState instanceof TdApi.AuthorizationStateClosed) {
-            System.out.println("Closed");
-            isRunning = false;
-        }
-    }
-    
-    private void handleWaitTdlibParameters() {
-        TdApi.SetTdlibParameters parameters = new TdApi.SetTdlibParameters();
-        parameters.databaseDirectory = "tdlib";
-        parameters.useMessageDatabase = true;
-        parameters.useSecretChats = true;
-        parameters.apiId = 94575; // Default test API ID
-        parameters.apiHash = "a3406de8d171bb422bb6ddf3bbd800e2"; // Default test API hash
-        parameters.systemLanguageCode = "en";
-        parameters.deviceModel = "Desktop";
-        parameters.applicationVersion = "1.0";
-        
-        client.send(parameters, new AuthorizationHandler());
-    }
-    
-    private void handleWaitPhoneNumber() {
-        System.out.print("Enter phone number: ");
-        Scanner scanner = new Scanner(System.in);
-        String phone = scanner.nextLine();
-        client.send(new TdApi.SetAuthenticationPhoneNumber(phone, null), new AuthorizationHandler());
-    }
-    
-    private void handleWaitCode() {
-        System.out.print("Enter verification code: ");
-        Scanner scanner = new Scanner(System.in);
-        String code = scanner.nextLine();
-        client.send(new TdApi.CheckAuthenticationCode(code), new AuthorizationHandler());
-    }
-    
-    private void handleWaitPassword() {
-        System.out.print("Enter password: ");
-        Scanner scanner = new Scanner(System.in);
-        String password = scanner.nextLine();
-        client.send(new TdApi.CheckAuthenticationPassword(password), new AuthorizationHandler());
-    }
-    
-    private void handleReady() {
-        authLock.lock();
-        try {
-            isAuthenticated = true;
-            authCondition.signalAll();
-        } finally {
-            authLock.unlock();
-        }
-    }
-    
-    // Authorization handler
-    private class AuthorizationHandler implements Client.ResultHandler {
-        @Override
-        public void onResult(TdApi.Object object) {
-            if (object instanceof TdApi.Error) {
-                TdApi.Error error = (TdApi.Error) object;
-                System.err.println("Authentication error: " + error.message);
-                authLock.lock();
-                try {
-                    authCondition.signalAll();
-                } finally {
-                    authLock.unlock();
-                }
-            }
-        }
-    }
-    
-    // Result handler interface
-    private static abstract class ResultHandler implements Client.ResultHandler {
-        @Override
-        public abstract void onResult(TdApi.Object object);
-    }
-    
     public static void main(String[] args) {
+        System.out.println(ANSI_CYAN + "╔════════════════════════════════════════════════════════════╗");
+        System.out.println("║  TeleRTX - Demo Terminal Telegram Client                  ║");
+        System.out.println("║  Inspired by Nagram's architecture                         ║");
+        System.out.println("║                                                            ║");
+        System.out.println("║  NOTE: This is a demonstration version showing the        ║");
+        System.out.println("║  structure and concepts from Nagram. For full Telegram    ║");
+        System.out.println("║  functionality, you would need to integrate:               ║");
+        System.out.println("║  - TDLib (requires native compilation)                     ║");
+        System.out.println("║  - or Telegram Bot API                                     ║");
+        System.out.println("║  - or implement MTProto protocol directly                  ║");
+        System.out.println("╚════════════════════════════════════════════════════════════╝" + ANSI_RESET);
+        System.out.println();
+        
         try {
             TeleRTX app = new TeleRTX();
             app.start();

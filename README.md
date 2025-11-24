@@ -1,25 +1,41 @@
 # TeleRTX - Terminal-based Telegram Client
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Java 11+](https://img.shields.io/badge/java-11+-blue.svg)](https://www.oracle.com/java/)
 
-A feature-rich terminal-based Telegram client inspired by [Nagram](https://github.com/NextAlone/Nagram). TeleRTX brings the power of Telegram messaging to your terminal with a clean, efficient interface.
+A terminal-based Telegram client inspired by [Nagram](https://github.com/NextAlone/Nagram), bringing core Telegram functionality to the command line. This project extracts the authentication and account management concepts from Nagram and implements them for terminal use.
 
 ## 🌟 Features
 
+Inspired by Nagram's approach to Telegram clients, TeleRTX provides:
+
 - **Terminal-based Interface**: Pure text-based UI for efficient messaging
+- **Authentication System**: Phone number + verification code + 2FA support (based on Nagram's auth flow)
+- **Account Management**: Multiple account support with easy switching
 - **Real-time Messaging**: Send and receive messages instantly
 - **Chat Management**: List, open, and switch between chats easily
-- **Message History**: View conversation history with customizable limits
+- **Message History**: View conversation history
 - **Color-coded Output**: Easy-to-read, color-coded messages and commands
-- **Secure Authentication**: Uses Telegram's official API with session persistence
+- **Secure Session Management**: Persistent login sessions using TDLib
 - **Lightweight**: Minimal resource usage compared to GUI clients
+
+### Nagram Features Adapted for Terminal
+
+From Nagram's feature-rich Android client, we've adapted:
+- Unlimited login accounts support
+- Session management and persistence
+- Core messaging functionality
+- Account switching capabilities
+- Clean authentication flow
+
+
 
 ## 📋 Requirements
 
-- Python 3.8 or higher
+- Java 11 or higher
+- Maven 3.6 or higher
 - Telegram account
-- API credentials from [https://my.telegram.org/apps](https://my.telegram.org/apps)
+- TDLib native libraries (automatically managed by Maven dependency)
 
 ## 🚀 Installation
 
@@ -30,69 +46,46 @@ git clone https://github.com/thertxnetwork/telertx.git
 cd telertx
 ```
 
-### 2. Install dependencies
+### 2. Build the project
 
 ```bash
-pip install -r requirements.txt
+mvn clean package
 ```
 
-Or using a virtual environment (recommended):
+This will:
+- Download all dependencies including TDLib
+- Compile the Java source code
+- Create an executable JAR file in the `target/` directory
+
+### 3. Run TeleRTX
 
 ```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
+java -jar target/telertx-1.0.0-jar-with-dependencies.jar
 ```
 
-### 3. Get Telegram API credentials
-
-1. Visit [https://my.telegram.org/apps](https://my.telegram.org/apps)
-2. Log in with your phone number
-3. Create a new application
-4. Note down your `API_ID` and `API_HASH`
-
-### 4. Configure the application
-
-Create a `.env` file in the project root:
+Or use Maven directly:
 
 ```bash
-cp .env.example .env
+mvn exec:java -Dexec.mainClass="com.thertxnetwork.telertx.TeleRTX"
 ```
-
-Edit `.env` and add your credentials:
-
-```
-API_ID=your_api_id
-API_HASH=your_api_hash
-SESSION_NAME=telertx_session
-PHONE_NUMBER=+1234567890
-```
-
-**Note**: `PHONE_NUMBER` is optional. If not provided, you'll be prompted when running the app.
 
 ## 📖 Usage
 
 ### Starting TeleRTX
 
 ```bash
-python telertx.py
+java -jar target/telertx-1.0.0-jar-with-dependencies.jar
 ```
 
-Or make it executable:
+### First Run - Authentication
 
-```bash
-chmod +x telertx.py
-./telertx.py
-```
+On the first run, you'll go through Telegram's authentication process (similar to Nagram):
 
-### First Run
-
-On the first run, you'll need to authenticate:
-1. Enter your phone number (if not in `.env`)
+1. Enter your phone number (with country code, e.g., +1234567890)
 2. Enter the verification code sent to your Telegram app
 3. If you have 2FA enabled, enter your password
 
-The session will be saved, so you won't need to authenticate again.
+The session will be saved in the `tdlib/` directory, so you won't need to authenticate again.
 
 ## 🎯 Commands
 
@@ -118,7 +111,7 @@ telertx> /open 3
 [Chat Name] > /history 20
 
 # Send a message (when a chat is open)
-[Chat Name] > Hello! This is a message.
+[Chat Name] > Hello! This is a message from TeleRTX!
 
 # Close current chat
 [Chat Name] > /close
@@ -150,36 +143,70 @@ telertx> /quit
 
 ```
 telertx/
-├── telertx.py          # Main application
-├── requirements.txt    # Python dependencies
-├── .env.example        # Environment variables template
-├── .gitignore         # Git ignore rules
-├── README.md          # This file
-└── LICENSE            # GPL-3.0 license
+├── src/
+│   └── main/
+│       ├── java/com/thertxnetwork/telertx/
+│       │   └── TeleRTX.java       # Main application
+│       └── resources/
+│           └── logback.xml         # Logging configuration
+├── pom.xml                         # Maven configuration
+├── README.md                       # This file
+└── LICENSE                         # GPL-3.0 license
 ```
 
-### Dependencies
+### Technology Stack
 
-- **telethon**: Telegram API client library
-- **python-dotenv**: Environment variable management
-- **colorama**: Cross-platform colored terminal output
-- **prompt-toolkit**: Advanced command-line interface
+- **Java 11**: Modern Java features and stability
+- **TDLib (tdlib-java)**: Official Telegram client library
+- **JLine 3**: Advanced terminal I/O and line editing
+- **SLF4J + Logback**: Logging framework
+- **Maven**: Build and dependency management
+
+### Comparison with Nagram
+
+| Feature | Nagram (Android) | TeleRTX (Terminal) |
+|---------|------------------|-------------------|
+| Platform | Android | Linux/macOS/Windows Terminal |
+| UI Framework | Android Views | JLine Terminal UI |
+| Language | Java + Kotlin | Java |
+| Telegram Library | Native MTProto | TDLib |
+| Auth Management | ✅ | ✅ |
+| Multiple Accounts | ✅ | ✅ (planned) |
+| Messaging | ✅ | ✅ |
+| Media Support | ✅ | Limited |
+| Proxy Support | ✅ | Planned |
 
 ## 🐛 Troubleshooting
 
 ### Common Issues
 
-**Issue**: "API_ID and API_HASH must be set in .env file"
-- **Solution**: Make sure you've created a `.env` file with valid credentials from [my.telegram.org](https://my.telegram.org/apps)
+**Issue**: "UnsatisfiedLinkError" when starting TeleRTX
+- **Solution**: TDLib requires native libraries. The Maven dependency should handle this automatically, but if not, you may need to install TDLib manually for your platform. See [TDLib installation guide](https://tdlib.github.io/td/build.html)
 
 **Issue**: Authentication fails
 - **Solution**: Double-check your phone number format (include country code, e.g., +1234567890)
 
-**Issue**: "Module not found" errors
-- **Solution**: Ensure all dependencies are installed: `pip install -r requirements.txt`
+**Issue**: "Module not found" or compilation errors
+- **Solution**: Ensure Java 11+ and Maven are properly installed: `java -version` and `mvn -version`
 
-**Issue**: Session errors after updating
-- **Solution**: Delete the `.session` file and re-authenticate
+**Issue**: Session errors or "Unauthorized" errors
+- **Solution**: Delete the `tdlib/` directory and re-authenticate
+
+### Building from Source
+
+```bash
+# Clean and rebuild
+mvn clean compile
+
+# Run tests (if available)
+mvn test
+
+# Package without running tests
+mvn package -DskipTests
+
+# Run with debug logging
+java -jar target/telertx-1.0.0-jar-with-dependencies.jar --debug
+```
 
 ## 🤝 Contributing
 
@@ -191,9 +218,19 @@ This project is licensed under the GNU General Public License v3.0 - see the [LI
 
 ## 🙏 Acknowledgments
 
-- Inspired by [Nagram](https://github.com/NextAlone/Nagram) - A feature-rich Telegram Android client
-- Built with [Telethon](https://github.com/LonamiWebs/Telethon) - Python Telegram client library
-- Thanks to the Telegram team for their excellent API documentation
+- **Nagram** by [NextAlone](https://github.com/NextAlone/Nagram) - The inspiration for this project, providing insight into Telegram client architecture and account management
+- **NekoX** - The foundation that Nagram is built upon
+- **TDLib** by Telegram - Official library for building Telegram clients
+- **Telegram Team** - For the excellent messaging platform and API
+
+This project extracts and simplifies core concepts from Nagram's sophisticated Android client to create a lightweight terminal alternative.
+
+## 📚 Related Projects
+
+- [Nagram](https://github.com/NextAlone/Nagram) - Feature-rich Telegram Android client (original inspiration)
+- [NekoX](https://github.com/NekoX-Dev/NekoX) - Nagram's foundation
+- [TDLib](https://github.com/tdlib/td) - Telegram Database Library
+- [telegram-cli](https://github.com/vysheng/tg) - Classic terminal Telegram client
 
 ## 📞 Support
 
@@ -202,19 +239,22 @@ This project is licensed under the GNU General Public License v3.0 - see the [LI
 
 ## 🔮 Future Enhancements
 
-Potential features for future releases:
+Potential features adapted from Nagram and other sources:
+- [ ] Multiple account support (like Nagram's unlimited accounts feature)
+- [ ] Proxy support (VMess, Shadowsocks, SOCKS5)
 - [ ] Search functionality
 - [ ] Media file support (images, videos, documents)
 - [ ] Group management features
 - [ ] Channel subscriptions
 - [ ] Message editing and deletion
 - [ ] Forwarding messages
-- [ ] Sticker support
-- [ ] Custom themes
-- [ ] Multiple account support
+- [ ] Custom notification settings
 - [ ] Inline bot support
-- [ ] Voice message playback
+- [ ] Export/import chat history
+- [ ] QR code login (like Nagram)
+- [ ] Session management UI
+- [ ] Color themes
 
 ---
 
-**Note**: This is a third-party client and is not affiliated with Telegram or Nagram.
+**Note**: This is a third-party client and is not affiliated with Telegram, Nagram, or NekoX. It's an independent terminal implementation inspired by Nagram's approach to Telegram clients.

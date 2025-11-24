@@ -21,13 +21,6 @@
     </properties>
 
     <dependencies>
-        <!-- TDLib Java bindings -->
-        <dependency>
-            <groupId>org.drinkless</groupId>
-            <artifactId>tdlib-java</artifactId>
-            <version>${tdlib.version}</version>
-        </dependency>
-
         <!-- JLine for terminal input/output -->
         <dependency>
             <groupId>org.jline</groupId>
@@ -54,6 +47,13 @@
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
             <version>2.10.1</version>
+        </dependency>
+        
+        <!-- OkHttp for HTTP client -->
+        <dependency>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>okhttp</artifactId>
+            <version>4.12.0</version>
         </dependency>
     </dependencies>
 
