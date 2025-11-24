@@ -156,8 +156,10 @@ class TelegramService:
         """
         client = session.initialize_client()
         
-        # Get initial authorization state
-        result = client.get_authorization_state()
+        # Get initial authorization state (returns AsyncResult, need to wait for it)
+        result_obj = client.get_authorization_state()
+        result_obj.wait(timeout=5)
+        result = result_obj.update
         session._authorization_state = result
         
         # If waiting for phone number, send it and wait for state change
@@ -173,7 +175,9 @@ class TelegramService:
             result = await session.wait_for_state_change(timeout=10.0)
             if result is None:
                 # Fallback to polling if event wasn't received
-                result = client.get_authorization_state()
+                result_obj = client.get_authorization_state()
+                result_obj.wait(timeout=5)
+                result = result_obj.update
             session._authorization_state = result
         
         session.update_last_used()
@@ -233,7 +237,9 @@ class TelegramService:
             result = await session.wait_for_state_change(timeout=10.0)
             if result is None:
                 # Fallback to polling if event wasn't received
-                result = client.get_authorization_state()
+                result_obj = client.get_authorization_state()
+                result_obj.wait(timeout=5)
+                result = result_obj.update
             
             session._authorization_state = result
             
@@ -280,7 +286,9 @@ class TelegramService:
             result = await session.wait_for_state_change(timeout=10.0)
             if result is None:
                 # Fallback to polling if event wasn't received
-                result = client.get_authorization_state()
+                result_obj = client.get_authorization_state()
+                result_obj.wait(timeout=5)
+                result = result_obj.update
             
             session._authorization_state = result
             
