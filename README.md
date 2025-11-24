@@ -39,6 +39,10 @@ From Nagram's feature-rich Android client, we've adapted:
 
 ## 🚀 Installation
 
+**New to Java or Maven?** See our [complete installation guide](INSTALL.md) for step-by-step instructions including installing Java, Maven, and all prerequisites.
+
+### Quick Install (for experienced users)
+
 ### 1. Clone the repository
 
 ```bash
@@ -60,7 +64,7 @@ This will:
 ### 3. Run TeleRTX
 
 ```bash
-java -jar target/telertx-1.0.0-jar-with-dependencies.jar
+java -jar target/telertx-*-jar-with-dependencies.jar
 ```
 
 Or use Maven directly:
@@ -68,6 +72,8 @@ Or use Maven directly:
 ```bash
 mvn exec:java -Dexec.mainClass="com.thertxnetwork.telertx.TeleRTX"
 ```
+
+📖 **For detailed installation instructions**, see [INSTALL.md](INSTALL.md)
 
 ## 📖 Usage
 

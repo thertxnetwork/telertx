@@ -39,6 +39,9 @@ public class TeleRTX {
     private static final String ANSI_BLUE = "\u001B[34m";
     private static final String ANSI_MAGENTA = "\u001B[35m";
     
+    // UI constants
+    private static final String SEPARATOR_LINE = "─".repeat(60);
+    
     // Configuration
     private static final String SESSION_DIR = "sessions";
     private static final String CONFIG_FILE = "config.properties";
@@ -56,6 +59,7 @@ public class TeleRTX {
     private long currentChatId = 0;
     private String currentChatTitle = "";
     private final Map<Long, Chat> chats = new LinkedHashMap<>();
+    private final List<Chat> chatList = new ArrayList<>();
     
     // Terminal UI
     private Terminal terminal;
@@ -296,6 +300,10 @@ public class TeleRTX {
         chats.put(4L, new Chat(4L, "Telegram News", "channel"));
         chats.get(2L).unreadCount = 3;
         chats.get(3L).unreadCount = 7;
+        
+        // Populate chatList for indexed access
+        chatList.clear();
+        chatList.addAll(chats.values());
     }
     
     private void mainLoop() {
@@ -386,7 +394,7 @@ public class TeleRTX {
     private void listChats() {
         System.out.println();
         System.out.println(ANSI_CYAN + "Recent Chats:" + ANSI_RESET);
-        System.out.println(ANSI_CYAN + "─".repeat(60) + ANSI_RESET);
+        System.out.println(ANSI_CYAN + SEPARATOR_LINE + ANSI_RESET);
         
         int index = 1;
         for (Chat chat : chats.values()) {
@@ -397,7 +405,7 @@ public class TeleRTX {
             index++;
         }
         
-        System.out.println(ANSI_CYAN + "─".repeat(60) + ANSI_RESET);
+        System.out.println(ANSI_CYAN + SEPARATOR_LINE + ANSI_RESET);
         System.out.println(ANSI_YELLOW + "Use /open <number> to open a chat" + ANSI_RESET);
         System.out.println();
     }
@@ -420,13 +428,13 @@ public class TeleRTX {
         try {
             int chatNum = Integer.parseInt(args);
             
-            if (chatNum < 1 || chatNum > chats.size()) {
+            if (chatNum < 1 || chatNum > chatList.size()) {
                 printError("Invalid chat number. Use /chats to see available chats.");
                 return;
             }
             
-            // Get chat by index
-            Chat chat = (Chat) chats.values().toArray()[chatNum - 1];
+            // Get chat by index from list
+            Chat chat = chatList.get(chatNum - 1);
             currentChatId = chat.id;
             currentChatTitle = chat.title;
             
@@ -466,16 +474,16 @@ public class TeleRTX {
             }
         }
         
-        System.out.println(ANSI_CYAN + "─".repeat(60) + ANSI_RESET);
+        System.out.println(ANSI_CYAN + SEPARATOR_LINE + ANSI_RESET);
         System.out.println(ANSI_YELLOW + "[Demo messages - in real implementation, these would be fetched from Telegram]" + ANSI_RESET);
-        System.out.println(ANSI_CYAN + "─".repeat(60) + ANSI_RESET);
+        System.out.println(ANSI_CYAN + SEPARATOR_LINE + ANSI_RESET);
         
         // Demo messages
         displayMessage(new Message(1, currentChatId, "Contact", "Hello! How are you?", false));
         displayMessage(new Message(2, currentChatId, "You", "I'm doing great, thanks!", true));
         displayMessage(new Message(3, currentChatId, "Contact", "That's wonderful to hear!", false));
         
-        System.out.println(ANSI_CYAN + "─".repeat(60) + ANSI_RESET);
+        System.out.println(ANSI_CYAN + SEPARATOR_LINE + ANSI_RESET);
     }
     
     private void displayMessage(Message message) {
