@@ -154,116 +154,113 @@ class TelegramService:
         Initiate login process for a session.
         Returns the current authorization state.
         """
+        import time
+        
         client = session.initialize_client()
         
-        # Get initial authorization state (returns AsyncResult, need to wait for it)
-        result_obj = client.get_authorization_state()
-        result_obj.wait(timeout=5)
-        result = result_obj.update
-        session._authorization_state = result
+        # Loop through initialization states until we reach a user-action state
+        max_iterations = 30  # Prevent infinite loops
+        iteration = 0
         
-        # Handle authorizationStateWaitTdlibParameters - send TDLib configuration
-        if result and result.get("@type") == "authorizationStateWaitTdlibParameters":
-            # Set TDLib parameters
-            params = {
-                "database_directory": session.get_session_path(),
-                "files_directory": session.get_session_path(),
-                "use_test_dc": False,
-                "use_file_database": True,
-                "use_chat_info_database": True,
-                "use_message_database": True,
-                "use_secret_chats": False,
-                "api_id": int(session.api_id),
-                "api_hash": session.api_hash,
-                "system_language_code": "en",
-                "device_model": "Server",
-                "system_version": "1.0",
-                "application_version": "1.0",
-            }
+        while iteration < max_iterations:
+            iteration += 1
             
-            client.call_method("setTdlibParameters", params=params, block=True)
-            
-            # Wait for state to change
-            result = await session.wait_for_state_change(timeout=10.0)
-            if result is None:
-                result_obj = client.get_authorization_state()
-                result_obj.wait(timeout=5)
-                result = result_obj.update
+            # Get current authorization state
+            result_obj = client.get_authorization_state()
+            result_obj.wait(timeout=10)
+            result = result_obj.update
             session._authorization_state = result
-        
-        # Handle authorizationStateWaitEncryptionKey - send database encryption key
-        if result and result.get("@type") == "authorizationStateWaitEncryptionKey":
-            # Check if database is encrypted
-            is_encrypted = result.get("is_encrypted", False)
             
-            # Send encryption key
-            client.call_method(
-                "checkDatabaseEncryptionKey",
-                params={"encryption_key": session.database_encryption_key},
-                block=True
-            )
+            state_type = result.get("@type") if result else None
             
-            # Wait for state to change
-            result = await session.wait_for_state_change(timeout=10.0)
-            if result is None:
-                result_obj = client.get_authorization_state()
-                result_obj.wait(timeout=5)
-                result = result_obj.update
-            session._authorization_state = result
-        
-        # If waiting for phone number, send it and wait for state change
-        if result and result.get("@type") == "authorizationStateWaitPhoneNumber":
-            # Send phone number using call_method
-            client.call_method(
-                "setAuthenticationPhoneNumber",
-                params={"phone_number": session.phone},
-                block=True
-            )
+            # Handle authorizationStateWaitTdlibParameters
+            if state_type == "authorizationStateWaitTdlibParameters":
+                params = {
+                    "database_directory": session.get_session_path(),
+                    "files_directory": session.get_session_path(),
+                    "use_test_dc": False,
+                    "use_file_database": True,
+                    "use_chat_info_database": True,
+                    "use_message_database": True,
+                    "use_secret_chats": False,
+                    "api_id": int(session.api_id),
+                    "api_hash": session.api_hash,
+                    "system_language_code": "en",
+                    "device_model": "Server",
+                    "system_version": "1.0",
+                    "application_version": "1.0",
+                }
+                client.call_method("setTdlibParameters", params=params, block=True)
+                time.sleep(1)  # Give TDLib time to process
+                continue
             
-            # Wait for state change event
-            result = await session.wait_for_state_change(timeout=10.0)
-            if result is None:
-                # Fallback to polling if event wasn't received
-                result_obj = client.get_authorization_state()
-                result_obj.wait(timeout=5)
-                result = result_obj.update
-            session._authorization_state = result
+            # Handle authorizationStateWaitEncryptionKey
+            elif state_type == "authorizationStateWaitEncryptionKey":
+                client.call_method(
+                    "checkDatabaseEncryptionKey",
+                    params={"encryption_key": session.database_encryption_key},
+                    block=True
+                )
+                time.sleep(1)
+                continue
+            
+            # Handle authorizationStateWaitPhoneNumber
+            elif state_type == "authorizationStateWaitPhoneNumber":
+                client.call_method(
+                    "setAuthenticationPhoneNumber",
+                    params={"phone_number": session.phone},
+                    block=True
+                )
+                time.sleep(2)  # Give more time for phone verification to start
+                continue
+            
+            # These are user-action states - return to client
+            elif state_type == "authorizationStateWaitCode":
+                session.update_last_used()
+                return {
+                    "status": "awaiting_code",
+                    "message": "Authentication code has been sent to your Telegram app",
+                    "session_id": session.session_id,
+                }
+            
+            elif state_type == "authorizationStateWaitPassword":
+                session.update_last_used()
+                return {
+                    "status": "awaiting_password",
+                    "message": "Two-factor authentication password required",
+                    "session_id": session.session_id,
+                }
+            
+            elif state_type == "authorizationStateReady":
+                session.is_authorized = True
+                session.update_last_used()
+                return {
+                    "status": "authorized",
+                    "message": "Successfully authorized",
+                    "session_id": session.session_id,
+                }
+            
+            elif state_type == "authorizationStateClosed":
+                session.update_last_used()
+                return {
+                    "status": "closed",
+                    "message": "Session was closed",
+                    "session_id": session.session_id,
+                }
+            
+            else:
+                # Unknown state, wait a bit and try again
+                time.sleep(0.5)
+                continue
         
+        # If we reached here, we exceeded max iterations
         session.update_last_used()
-        
-        # Check current authorization state and return appropriate response
-        if result and result.get("@type") == "authorizationStateWaitCode":
-            return {
-                "status": "awaiting_code",
-                "message": "Authentication code has been sent to your Telegram app",
-                "session_id": session.session_id,
-            }
-        elif result and result.get("@type") == "authorizationStateWaitPassword":
-            return {
-                "status": "awaiting_password",
-                "message": "Two-factor authentication password required",
-                "session_id": session.session_id,
-            }
-        elif result and result.get("@type") == "authorizationStateReady":
-            session.is_authorized = True
-            return {
-                "status": "authorized",
-                "message": "Successfully authorized",
-                "session_id": session.session_id,
-            }
-        elif result and result.get("@type") == "authorizationStateWaitPhoneNumber":
-            return {
-                "status": "awaiting_phone",
-                "message": "Phone number required for authentication",
-                "session_id": session.session_id,
-            }
-        else:
-            return {
-                "status": "unknown",
-                "message": f"Authorization state: {result.get('@type', 'unknown') if result else 'no_state'}",
-                "session_id": session.session_id,
-                "state": result,
-            }
+        return {
+            "status": "timeout",
+            "message": f"Authentication timed out at state: {result.get('@type') if result else 'unknown'}",
+            "session_id": session.session_id,
+            "state": result,
+        }
     
     async def submit_code(self, session_id: str, code: str) -> Dict[str, Any]:
         """Submit authentication code for a session."""
