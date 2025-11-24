@@ -80,8 +80,21 @@ mvn exec:java -Dexec.mainClass="com.thertxnetwork.telertx.TeleRTX"
 
 ### Starting TeleRTX
 
+⚠️ **IMPORTANT**: The commands below (like `/proxy`, `/chats`) are used INSIDE the TeleRTX application, not in your terminal shell!
+
+📖 **New to TeleRTX?** See [RUNNING.md](RUNNING.md) for a complete guide on how to start and use the application.
+
+**Step 1: Start the application**
 ```bash
-java -jar target/telertx-1.0.0-jar-with-dependencies.jar
+cd /path/to/telertx
+java -jar target/telertx-*-jar-with-dependencies.jar
+```
+
+**Step 2: Use commands inside the app**
+```bash
+telertx> /help
+telertx> /proxy set
+telertx> /chats
 ```
 
 ### First Run - Authentication
@@ -112,17 +125,20 @@ The session will be saved in the `tdlib/` directory, so you won't need to authen
 
 TeleRTX supports SOCKS5 and HTTP proxies, which is essential in regions where Telegram is blocked or for receiving OTPs.
 
-```bash
-# View current proxy configuration
-telertx> /proxy info
+📖 **For detailed proxy setup instructions, see [PROXY_GUIDE.md](PROXY_GUIDE.md)**
 
-# Configure a new proxy
+**Quick Example:**
+```bash
+# Configure a SOCKS5 proxy
 telertx> /proxy set
-# Follow the interactive prompts:
-# - Proxy type (SOCKS5/HTTP)
-# - Host (e.g., 127.0.0.1 or proxy.example.com)
-# - Port (default: 1080)
-# - Authentication (optional)
+Proxy type (SOCKS5/HTTP) [SOCKS5]: SOCKS5
+Proxy host: 127.0.0.1
+Proxy port [1080]: 1080
+Use authentication? (yes/no) [no]: no
+✓ Proxy configured successfully!
+
+# View current configuration
+telertx> /proxy info
 
 # Enable/disable proxy
 telertx> /proxy enable
@@ -132,17 +148,14 @@ telertx> /proxy disable
 telertx> /proxy test
 ```
 
-**Example SOCKS5 Proxy Setup:**
-```bash
-telertx> /proxy set
-Proxy type (SOCKS5/HTTP) [SOCKS5]: SOCKS5
-Proxy host: 127.0.0.1
-Proxy port [1080]: 1080
-Use authentication? (yes/no) [no]: no
-✓ Proxy configured successfully!
-```
+**Available Commands:**
+- `/proxy set` - Configure proxy (interactive setup)
+- `/proxy info` - View current configuration
+- `/proxy enable` - Enable configured proxy
+- `/proxy disable` - Disable proxy
+- `/proxy test` - Test proxy connectivity
 
-**Note**: The proxy will be used for all Telegram API connections when integrated with TDLib or Bot API.
+**Note**: The proxy will be used for all Telegram API connections when integrated with TDLib or Bot API. Configuration is saved and automatically loaded on startup.
 
 ### Usage Examples
 

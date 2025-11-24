@@ -1,5 +1,13 @@
 # TeleRTX Quick Start Guide
 
+## ⚠️ Important Note
+
+**All commands (like `/proxy`, `/chats`, `/help`) must be used INSIDE the TeleRTX application after you start it!**
+
+Don't type `telertx> /proxy set` in your terminal shell - that won't work.
+
+📖 **See [RUNNING.md](RUNNING.md) for detailed instructions on starting TeleRTX**
+
 ## Prerequisites
 - Java 11 or higher: `java -version`
 - Maven 3.6+: `mvn -version`
@@ -18,6 +26,17 @@ This creates: `target/telertx-1.0.0-jar-with-dependencies.jar`
 ```bash
 java -jar target/telertx-1.0.0-jar-with-dependencies.jar
 ```
+
+**You should see:**
+```
+╔═══════════════════════════════════════════════════╗
+║       TeleRTX - Terminal Telegram Client          ║
+╚═══════════════════════════════════════════════════╝
+
+telertx>
+```
+
+**Now you can type commands inside the app!**
 
 ### 3. First-time authentication
 You'll be prompted to enter:
@@ -56,10 +75,13 @@ telertx> /quit           # Exit
 
 ## Proxy Configuration (Important!)
 
-If Telegram is blocked in your region or you're not receiving OTPs, configure a proxy:
+If Telegram is blocked in your region or you're not receiving OTPs, configure a proxy.
 
+📖 **See [PROXY_GUIDE.md](PROXY_GUIDE.md) for complete step-by-step instructions**
+
+**Quick Setup:**
 ```bash
-# Set up a SOCKS5 proxy
+# Step 1: Configure proxy
 telertx> /proxy set
 Proxy type (SOCKS5/HTTP) [SOCKS5]: SOCKS5
 Proxy host: 127.0.0.1
@@ -67,12 +89,22 @@ Proxy port [1080]: 1080
 Use authentication? (yes/no) [no]: no
 ✓ Proxy configured successfully!
 
-# View proxy status
+# Step 2: Verify it's enabled
 telertx> /proxy info
+╔═══ Proxy Configuration ═══╗
+║ Status: Enabled
+║ Type: SOCKS5
+║ Host: 127.0.0.1
+║ Port: 1080
+║ Auth: No
+╚═══════════════════════════╝
 
-# Enable/disable proxy
-telertx> /proxy enable
-telertx> /proxy disable
+# Step 3 (Optional): Test connection
+telertx> /proxy test
+
+# Manage proxy
+telertx> /proxy enable    # Turn on
+telertx> /proxy disable   # Turn off
 ```
 
 ## Session Management
