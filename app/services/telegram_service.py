@@ -162,6 +162,55 @@ class TelegramService:
         result = result_obj.update
         session._authorization_state = result
         
+        # Handle authorizationStateWaitTdlibParameters - send TDLib configuration
+        if result and result.get("@type") == "authorizationStateWaitTdlibParameters":
+            # Set TDLib parameters
+            params = {
+                "database_directory": session.get_session_path(),
+                "files_directory": session.get_session_path(),
+                "use_test_dc": False,
+                "use_file_database": True,
+                "use_chat_info_database": True,
+                "use_message_database": True,
+                "use_secret_chats": False,
+                "api_id": int(session.api_id),
+                "api_hash": session.api_hash,
+                "system_language_code": "en",
+                "device_model": "Server",
+                "system_version": "1.0",
+                "application_version": "1.0",
+            }
+            
+            client.call_method("setTdlibParameters", params=params, block=True)
+            
+            # Wait for state to change
+            result = await session.wait_for_state_change(timeout=10.0)
+            if result is None:
+                result_obj = client.get_authorization_state()
+                result_obj.wait(timeout=5)
+                result = result_obj.update
+            session._authorization_state = result
+        
+        # Handle authorizationStateWaitEncryptionKey - send database encryption key
+        if result and result.get("@type") == "authorizationStateWaitEncryptionKey":
+            # Check if database is encrypted
+            is_encrypted = result.get("is_encrypted", False)
+            
+            # Send encryption key
+            client.call_method(
+                "checkDatabaseEncryptionKey",
+                params={"encryption_key": session.database_encryption_key},
+                block=True
+            )
+            
+            # Wait for state to change
+            result = await session.wait_for_state_change(timeout=10.0)
+            if result is None:
+                result_obj = client.get_authorization_state()
+                result_obj.wait(timeout=5)
+                result = result_obj.update
+            session._authorization_state = result
+        
         # If waiting for phone number, send it and wait for state change
         if result and result.get("@type") == "authorizationStateWaitPhoneNumber":
             # Send phone number using call_method
