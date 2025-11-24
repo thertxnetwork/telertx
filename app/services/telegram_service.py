@@ -180,9 +180,14 @@ class TelegramService:
         
         # Submit the code
         try:
-            # The python-telegram library might handle this differently
-            # We need to wait for the next authorization state
+            # Send the authentication code
+            result = client.send_code(code)
+            session._authorization_state = result
+            
+            # Wait a bit for processing
             await asyncio.sleep(1)
+            
+            # Get the latest state
             result = client.get_authorization_state()
             session._authorization_state = result
             
@@ -222,7 +227,14 @@ class TelegramService:
         session.update_last_used()
         
         try:
+            # Send the 2FA password
+            result = client.send_password(password)
+            session._authorization_state = result
+            
+            # Wait a bit for processing
             await asyncio.sleep(1)
+            
+            # Get the latest state
             result = client.get_authorization_state()
             session._authorization_state = result
             
