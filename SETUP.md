@@ -23,15 +23,31 @@ https://adoptium.net/
 ## Step 3: Configure the Project
 
 ### Update API Credentials
-Open `app/src/main/java/com/thertx/telertx/TelegramClient.java` and update:
 
-```java
-private static final int API_ID = YOUR_API_ID; // Replace with your API ID
-private static final String API_HASH = "YOUR_API_HASH"; // Replace with your API Hash
+The app reads Telegram API credentials from `local.properties` file (which is not committed to git for security).
+
+1. Copy `local.properties.template` to `local.properties`:
+```bash
+cp local.properties.template local.properties
 ```
 
+2. Edit `local.properties` and update your credentials:
+```properties
+sdk.dir=/path/to/Android/sdk
+telegram.api.id=YOUR_API_ID
+telegram.api.hash=YOUR_API_HASH
+```
+
+**Alternative:** You can also use environment variables:
+```bash
+export TELEGRAM_API_ID=your_api_id
+export TELEGRAM_API_HASH=your_api_hash
+```
+
+**Note:** The app includes placeholder credentials for demo purposes, but you should use your own for production use.
+
 ### Configure Android SDK Path
-Copy `local.properties.template` to `local.properties` and set your Android SDK path:
+In the same `local.properties` file, set your Android SDK path:
 
 ```properties
 sdk.dir=/path/to/Android/sdk
@@ -44,26 +60,7 @@ export ANDROID_HOME=/path/to/Android/sdk
 
 ### Update build.gradle for Google Repository
 
-The project requires Google's Maven repository for Android dependencies. Update the root `build.gradle`:
-
-```gradle
-buildscript {
-    repositories {
-        google()  // Add this
-        mavenCentral()
-    }
-    dependencies {
-        classpath 'com.android.tools.build:gradle:8.2.0'
-    }
-}
-
-allprojects {
-    repositories {
-        google()  // Add this
-        mavenCentral()
-    }
-}
-```
+**UPDATE: This has been fixed in the latest version.** The project now includes Google's Maven repository.
 
 ## Step 4: Build the Project
 

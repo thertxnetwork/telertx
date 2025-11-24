@@ -9,3 +9,8 @@
 #
 # You can also set it using the ANDROID_HOME environment variable:
 # ANDROID_HOME=/path/to/Android/sdk
+#
+# IMPORTANT: Add your Telegram API credentials here
+# Get them from https://my.telegram.org
+telegram.api.id=YOUR_API_ID
+telegram.api.hash=YOUR_API_HASH

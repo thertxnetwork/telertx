@@ -12,6 +12,24 @@ android {
         targetSdk 34
         versionCode 1
         versionName "1.0"
+        
+        // Read API credentials from local.properties or environment variables
+        // This keeps them out of version control
+        def localProperties = new Properties()
+        def localPropertiesFile = rootProject.file('local.properties')
+        if (localPropertiesFile.exists()) {
+            localPropertiesFile.withInputStream { localProperties.load(it) }
+        }
+        
+        // Get API credentials from local.properties or use placeholder values
+        // To use real values, add to local.properties:
+        // telegram.api.id=YOUR_API_ID
+        // telegram.api.hash=YOUR_API_HASH
+        def apiId = localProperties.getProperty('telegram.api.id') ?: System.getenv('TELEGRAM_API_ID') ?: '94575'
+        def apiHash = localProperties.getProperty('telegram.api.hash') ?: System.getenv('TELEGRAM_API_HASH') ?: 'a3406de8d171bb422bb6ddf3bbd800e2'
+        
+        buildConfigField "int", "TELEGRAM_API_ID", apiId
+        buildConfigField "String", "TELEGRAM_API_HASH", "\"${apiHash}\""
     }
 
     buildTypes {
@@ -24,6 +42,10 @@ android {
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_11
         targetCompatibility JavaVersion.VERSION_11
+    }
+    
+    buildFeatures {
+        buildConfig = true
     }
 }
 

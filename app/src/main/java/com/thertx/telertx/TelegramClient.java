@@ -12,10 +12,13 @@ public class TelegramClient {
     private Client client;
     private Context context;
     
-    // Telegram API credentials (these should be obtained from https://my.telegram.org)
-    // For demo purposes, using placeholder values
-    private static final int API_ID = 94575; // Replace with your API ID
-    private static final String API_HASH = "a3406de8d171bb422bb6ddf3bbd800e2"; // Replace with your API Hash
+    // Telegram API credentials (obtained from https://my.telegram.org)
+    // These values are loaded from BuildConfig which reads from:
+    // 1. local.properties (telegram.api.id and telegram.api.hash)
+    // 2. Environment variables (TELEGRAM_API_ID and TELEGRAM_API_HASH)
+    // 3. Default placeholder values (for demo purposes only)
+    private static final int API_ID = BuildConfig.TELEGRAM_API_ID;
+    private static final String API_HASH = BuildConfig.TELEGRAM_API_HASH;
     
     private String currentPhoneNumber;
     private AuthCallback currentAuthCallback;
