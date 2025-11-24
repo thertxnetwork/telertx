@@ -6,6 +6,7 @@ import json
 from typing import Optional, Dict, Any
 from datetime import datetime
 import uuid
+from asyncio import Event, wait_for, TimeoutError as AsyncTimeoutError
 
 try:
     from telegram.client import Telegram
@@ -39,10 +40,17 @@ class TelegramSession:
         self.is_authorized = False
         self._client: Optional[Telegram] = None
         self._authorization_state = None
+        self._state_changed_event = Event()
         
     def get_session_path(self) -> str:
         """Get the path for this session's data."""
         return os.path.join(self.session_dir, self.session_id)
+    
+    def _update_handler(self, update):
+        """Handle updates from TDLib."""
+        if update.get("@type") == "updateAuthorizationState":
+            self._authorization_state = update.get("authorization_state")
+            self._state_changed_event.set()
     
     def initialize_client(self):
         """Initialize the Telegram client."""
@@ -54,10 +62,22 @@ class TelegramSession:
                 database_encryption_key=self.database_encryption_key,
                 files_directory=self.get_session_path(),
             )
+            # Register update handler for auth state changes
+            self._client.add_update_handler("updateAuthorizationState", self._update_handler)
         return self._client
+    
+    async def wait_for_state_change(self, timeout: float = 5.0) -> Optional[Dict[str, Any]]:
+        """Wait for authorization state to change."""
+        try:
+            await wait_for(self._state_changed_event.wait(), timeout=timeout)
+            self._state_changed_event.clear()
+            return self._authorization_state
+        except AsyncTimeoutError:
+            return None
     
     def get_client(self) -> Optional[Telegram]:
         """Get the Telegram client instance."""
+        return self._client
         return self._client
     
     def update_last_used(self):
@@ -135,17 +155,30 @@ class TelegramService:
         Returns the current authorization state.
         """
         client = session.initialize_client()
-        client.login()
         
-        # Wait a bit for the login process to start
-        await asyncio.sleep(2)
-        
-        # Get authorization state
+        # Get initial authorization state
         result = client.get_authorization_state()
         session._authorization_state = result
+        
+        # If waiting for phone number, send it and wait for state change
+        if result and result.get("@type") == "authorizationStateWaitPhoneNumber":
+            # Send phone number using call_method
+            client.call_method(
+                "setAuthenticationPhoneNumber",
+                params={"phone_number": session.phone},
+                block=True
+            )
+            
+            # Wait for state change event
+            result = await session.wait_for_state_change(timeout=10.0)
+            if result is None:
+                # Fallback to polling if event wasn't received
+                result = client.get_authorization_state()
+            session._authorization_state = result
+        
         session.update_last_used()
         
-        # Check if we need a code
+        # Check current authorization state and return appropriate response
         if result and result.get("@type") == "authorizationStateWaitCode":
             return {
                 "status": "awaiting_code",
@@ -165,10 +198,16 @@ class TelegramService:
                 "message": "Successfully authorized",
                 "session_id": session.session_id,
             }
+        elif result and result.get("@type") == "authorizationStateWaitPhoneNumber":
+            return {
+                "status": "awaiting_phone",
+                "message": "Phone number required for authentication",
+                "session_id": session.session_id,
+            }
         else:
             return {
                 "status": "unknown",
-                "message": "Unknown authorization state",
+                "message": f"Authorization state: {result.get('@type', 'unknown') if result else 'no_state'}",
                 "session_id": session.session_id,
                 "state": result,
             }
@@ -188,14 +227,14 @@ class TelegramService:
         # Submit the code
         try:
             # Send the authentication code
-            result = client.send_code(code)
-            session._authorization_state = result
+            client.send_code(code)
             
-            # Wait a bit for processing
-            await asyncio.sleep(1)
+            # Wait for state change event
+            result = await session.wait_for_state_change(timeout=10.0)
+            if result is None:
+                # Fallback to polling if event wasn't received
+                result = client.get_authorization_state()
             
-            # Get the latest state
-            result = client.get_authorization_state()
             session._authorization_state = result
             
             if result and result.get("@type") == "authorizationStateWaitPassword":
@@ -212,7 +251,7 @@ class TelegramService:
             else:
                 return {
                     "status": "unknown",
-                    "message": "Code submitted, checking status",
+                    "message": f"Current state: {result.get('@type', 'unknown') if result else 'no_state'}",
                     "state": result,
                 }
         except Exception as e:
@@ -235,14 +274,14 @@ class TelegramService:
         
         try:
             # Send the 2FA password
-            result = client.send_password(password)
-            session._authorization_state = result
+            client.send_password(password)
             
-            # Wait a bit for processing
-            await asyncio.sleep(1)
+            # Wait for state change event
+            result = await session.wait_for_state_change(timeout=10.0)
+            if result is None:
+                # Fallback to polling if event wasn't received
+                result = client.get_authorization_state()
             
-            # Get the latest state
-            result = client.get_authorization_state()
             session._authorization_state = result
             
             if result and result.get("@type") == "authorizationStateReady":
@@ -254,7 +293,7 @@ class TelegramService:
             else:
                 return {
                     "status": "unknown",
-                    "message": "Password submitted, checking status",
+                    "message": f"Current state: {result.get('@type', 'unknown') if result else 'no_state'}",
                     "state": result,
                 }
         except Exception as e:
