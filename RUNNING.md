@@ -17,6 +17,7 @@ cd /root/telertx
 
 ### Step 2: Run the Application
 
+**Standard way:**
 ```bash
 java -jar target/telertx-1.0.0-jar-with-dependencies.jar
 ```
@@ -25,6 +26,14 @@ java -jar target/telertx-1.0.0-jar-with-dependencies.jar
 ```bash
 java -jar target/telertx-*-jar-with-dependencies.jar
 ```
+
+**To suppress reflection warnings (Java 11+):**
+```bash
+java --add-opens java.base/java.lang=ALL-UNNAMED \
+     -jar target/telertx-*-jar-with-dependencies.jar
+```
+
+Or simply ignore the warnings - they don't affect functionality.
 
 ### Step 3: Use Commands Inside the Application
 
@@ -126,6 +135,22 @@ mvn clean package
 ```
 
 ## Troubleshooting
+
+### Seeing Reflection Warnings
+
+If you see warnings like:
+```
+WARNING: An illegal reflective access operation has occurred
+WARNING: Illegal reflective access by org.jline.terminal.impl.exec.ExecTerminalProvider
+```
+
+**These are harmless and can be ignored.** They occur on Java 11+ due to JLine's terminal handling.
+
+**To suppress them:**
+```bash
+java --add-opens java.base/java.lang=ALL-UNNAMED \
+     -jar target/telertx-*-jar-with-dependencies.jar
+```
 
 ### "java: command not found"
 Install Java 11 or higher:

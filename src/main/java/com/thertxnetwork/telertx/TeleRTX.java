@@ -201,9 +201,36 @@ public class TeleRTX {
         // Load existing sessions
         loadSessions();
         
+        // Check if proxy is configured - if not, offer to configure it first
+        if (accounts.isEmpty() && !proxyConfig.enabled && proxyConfig.host.isEmpty()) {
+            System.out.println();
+            System.out.println(ANSI_YELLOW + "═══════════════════════════════════════════════════════════" + ANSI_RESET);
+            System.out.println(ANSI_YELLOW + "No existing sessions found." + ANSI_RESET);
+            System.out.println();
+            System.out.println(ANSI_CYAN + "Would you like to configure a proxy before authentication?" + ANSI_RESET);
+            System.out.println(ANSI_CYAN + "(Recommended if Telegram is blocked in your region)" + ANSI_RESET);
+            System.out.println();
+            
+            try {
+                String response = lineReader.readLine(ANSI_YELLOW + "Configure proxy now? (yes/no) [no]: " + ANSI_RESET);
+                if ("yes".equalsIgnoreCase(response) || "y".equalsIgnoreCase(response)) {
+                    System.out.println();
+                    configureProxy();
+                    System.out.println();
+                }
+            } catch (Exception e) {
+                logger.warn("Error prompting for proxy setup", e);
+            }
+            
+            System.out.println(ANSI_YELLOW + "═══════════════════════════════════════════════════════════" + ANSI_RESET);
+            System.out.println();
+            System.out.println(ANSI_GREEN + "Starting authentication..." + ANSI_RESET);
+            System.out.println(ANSI_YELLOW + "(You can configure proxy later using /proxy set command)" + ANSI_RESET);
+            System.out.println();
+        }
+        
         // Authenticate or load existing session
         if (accounts.isEmpty()) {
-            System.out.println(ANSI_YELLOW + "No existing sessions found. Starting authentication..." + ANSI_RESET);
             performAuthentication();
         } else {
             System.out.println(ANSI_GREEN + "✓ Loaded " + accounts.size() + " existing session(s)" + ANSI_RESET);

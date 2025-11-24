@@ -99,13 +99,34 @@ telertx> /chats
 
 ### First Run - Authentication
 
-On the first run, you'll go through Telegram's authentication process (similar to Nagram):
+On the first run, you'll be prompted to configure a proxy (optional but recommended if Telegram is blocked):
+
+**Step 1: Proxy Configuration (Optional)**
+```
+Would you like to configure a proxy before authentication?
+(Recommended if Telegram is blocked in your region)
+
+Configure proxy now? (yes/no) [no]: yes
+
+=== Proxy Configuration ===
+Proxy type (SOCKS5/HTTP) [SOCKS5]: SOCKS5
+Proxy host: 127.0.0.1
+Proxy port [1080]: 1080
+Use authentication? (yes/no) [no]: no
+✓ Proxy configured successfully!
+```
+
+**Step 2: Telegram Authentication**
+
+Then you'll go through Telegram's authentication process (similar to Nagram):
 
 1. Enter your phone number (with country code, e.g., +1234567890)
 2. Enter the verification code sent to your Telegram app
 3. If you have 2FA enabled, enter your password
 
-The session will be saved in the `tdlib/` directory, so you won't need to authenticate again.
+The session will be saved, so you won't need to authenticate again.
+
+**Note**: You can skip proxy configuration and set it up later using `/proxy set` command.
 
 ## 🎯 Commands
 

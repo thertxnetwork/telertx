@@ -39,6 +39,33 @@ telertx>
 **Now you can type commands inside the app!**
 
 ### 3. First-time authentication
+
+**New users will see a proxy configuration prompt first:**
+
+```
+No existing sessions found.
+
+Would you like to configure a proxy before authentication?
+(Recommended if Telegram is blocked in your region)
+
+Configure proxy now? (yes/no) [no]: yes
+```
+
+- Type `yes` if you need a proxy (Telegram is blocked, not receiving OTPs)
+- Type `no` or press Enter to skip (you can configure later)
+
+**If you choose yes, follow the proxy setup:**
+```
+=== Proxy Configuration ===
+Proxy type (SOCKS5/HTTP) [SOCKS5]: SOCKS5
+Proxy host: 127.0.0.1
+Proxy port [1080]: 1080
+Use authentication? (yes/no) [no]: no
+✓ Proxy configured successfully!
+```
+
+**Then authentication starts:**
+
 You'll be prompted to enter:
 - Phone number (with country code, e.g., `+1234567890`)
 - Verification code (simulated - enter any 6 digits)
