@@ -23,6 +23,29 @@ This app is based on the [Nagram](https://github.com/NextAlone/Nagram) Telegram 
 - Android Studio Arctic Fox or later
 - Android SDK 21 or higher
 - JDK 11 or higher
+- Internet access to download dependencies from Google Maven and Maven Central
+
+### Important: Google Maven Repository
+
+The Android Gradle Plugin and Android dependencies require access to Google's Maven repository (dl.google.com). If you encounter network issues, you'll need to:
+
+1. Update `build.gradle` to include Google's Maven repository:
+```gradle
+buildscript {
+    repositories {
+        google()  // Add this line
+        mavenCentral()
+    }
+    // ... rest of configuration
+}
+
+allprojects {
+    repositories {
+        google()  // Add this line
+        mavenCentral()
+    }
+}
+```
 
 ### Build Instructions
 
@@ -36,15 +59,24 @@ cd telertx
    - API_ID
    - API_HASH
 
-3. Build the project:
+3. **Important**: Update `build.gradle` files to add `google()` repository (see above)
+
+4. Build the project:
 ```bash
 ./gradlew assembleDebug
 ```
 
-4. Install on device:
+5. Install on device:
 ```bash
 ./gradlew installDebug
 ```
+
+### Building with Android Studio
+
+It's recommended to open the project in Android Studio, which will automatically:
+- Download required dependencies
+- Configure the Android SDK
+- Handle repository configuration
 
 ## Usage
 
