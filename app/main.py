@@ -13,10 +13,19 @@ async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown events."""
     # Startup
     settings = get_settings()
-    telegram_service = get_telegram_service(session_dir=settings.session_dir)
+    try:
+        telegram_service = get_telegram_service(session_dir=settings.session_dir)
+    except Exception as e:
+        import sys
+        print(f"Error initializing Telegram service: {e}", file=sys.stderr)
+        raise
     yield
     # Shutdown
-    await telegram_service.close_all_sessions()
+    try:
+        await telegram_service.close_all_sessions()
+    except Exception as e:
+        import sys
+        print(f"Error during shutdown: {e}", file=sys.stderr)
 
 
 def create_app() -> FastAPI:

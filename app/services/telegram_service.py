@@ -5,8 +5,15 @@ import os
 import json
 from typing import Optional, Dict, Any
 from datetime import datetime
-from telegram.client import Telegram
 import uuid
+
+try:
+    from telegram.client import Telegram
+except ImportError as e:
+    raise ImportError(
+        "Failed to import telegram.client. "
+        "Please ensure python-telegram is installed: pip install python-telegram"
+    ) from e
 
 
 class TelegramSession:

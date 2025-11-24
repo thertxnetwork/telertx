@@ -24,12 +24,51 @@ cd telertx
 pip install -r requirements.txt
 ```
 
-3. Create a `.env` file (optional) to customize settings:
+3. **Verify installation** (recommended):
+```bash
+python startup_check.py
+```
+
+This will check if all required dependencies, including TDLib, are properly installed.
+
+4. Create a `.env` file (optional) to customize settings:
 ```env
 SESSION_DIR=./sessions
 HOST=0.0.0.0
 PORT=8000
 ```
+
+## Troubleshooting
+
+### Import Errors on Startup
+
+If you encounter import errors when starting the server (especially with uvicorn/uvloop), try:
+
+1. **Run the startup check**:
+   ```bash
+   python startup_check.py
+   ```
+
+2. **Verify TDLib is installed**: The `python-telegram` library requires TDLib. On most systems:
+   ```bash
+   # Ubuntu/Debian
+   sudo apt-get install libtdjson1.8.0
+
+   # MacOS
+   brew install tdlib
+
+   # Or install from source: https://github.com/tdlib/td
+   ```
+
+3. **Test import directly**:
+   ```bash
+   python -c "from telegram.client import Telegram; print('OK')"
+   ```
+
+4. **Check Python version**: Ensure you're using Python 3.8+
+   ```bash
+   python --version
+   ```
 
 ## Usage
 
