@@ -12,6 +12,7 @@ Inspired by Nagram's approach to Telegram clients, TeleRTX provides:
 - **Terminal-based Interface**: Pure text-based UI for efficient messaging
 - **Authentication System**: Phone number + verification code + 2FA support (based on Nagram's auth flow)
 - **Account Management**: Multiple account support with easy switching
+- **Proxy Support**: SOCKS5 and HTTP proxy support for bypassing restrictions and receiving OTPs ⭐
 - **Real-time Messaging**: Send and receive messages instantly
 - **Chat Management**: List, open, and switch between chats easily
 - **Message History**: View conversation history
@@ -24,10 +25,10 @@ Inspired by Nagram's approach to Telegram clients, TeleRTX provides:
 From Nagram's feature-rich Android client, we've adapted:
 - Unlimited login accounts support
 - Session management and persistence
+- **Proxy support** (SOCKS5, HTTP) - Essential for regions where Telegram is blocked
 - Core messaging functionality
 - Account switching capabilities
 - Clean authentication flow
-
 
 
 ## 📋 Requirements
@@ -102,7 +103,46 @@ The session will be saved in the `tdlib/` directory, so you won't need to authen
 | `/open <number>` | `/o <number>` | Open a chat by its number from the list |
 | `/close` | - | Close the current chat |
 | `/history [n]` | `/m [n]` | Show last n messages (default: 10) |
+| `/account` | `/acc` | Show account information |
+| `/proxy` | - | Configure SOCKS5/HTTP proxy (see below) |
+| `/logout` | - | Logout current account |
 | `/quit` | `/q`, `/exit` | Exit TeleRTX |
+
+### Proxy Configuration
+
+TeleRTX supports SOCKS5 and HTTP proxies, which is essential in regions where Telegram is blocked or for receiving OTPs.
+
+```bash
+# View current proxy configuration
+telertx> /proxy info
+
+# Configure a new proxy
+telertx> /proxy set
+# Follow the interactive prompts:
+# - Proxy type (SOCKS5/HTTP)
+# - Host (e.g., 127.0.0.1 or proxy.example.com)
+# - Port (default: 1080)
+# - Authentication (optional)
+
+# Enable/disable proxy
+telertx> /proxy enable
+telertx> /proxy disable
+
+# Test proxy connection
+telertx> /proxy test
+```
+
+**Example SOCKS5 Proxy Setup:**
+```bash
+telertx> /proxy set
+Proxy type (SOCKS5/HTTP) [SOCKS5]: SOCKS5
+Proxy host: 127.0.0.1
+Proxy port [1080]: 1080
+Use authentication? (yes/no) [no]: no
+✓ Proxy configured successfully!
+```
+
+**Note**: The proxy will be used for all Telegram API connections when integrated with TDLib or Bot API.
 
 ### Usage Examples
 

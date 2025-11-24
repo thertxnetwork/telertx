@@ -34,6 +34,9 @@ env/
 *.session-journal
 sessions/
 
+# Configuration files (contains proxy credentials)
+config.properties
+
 # Environment variables
 .env
 

@@ -50,8 +50,30 @@ telertx> /quit           # Exit
 | `/close` | Close current chat |
 | `/history [n]` | Show last n messages |
 | `/account` | Show account info |
+| `/proxy` | Configure SOCKS5/HTTP proxy |
 | `/logout` | Logout current account |
 | `/quit`, `/q` | Exit TeleRTX |
+
+## Proxy Configuration (Important!)
+
+If Telegram is blocked in your region or you're not receiving OTPs, configure a proxy:
+
+```bash
+# Set up a SOCKS5 proxy
+telertx> /proxy set
+Proxy type (SOCKS5/HTTP) [SOCKS5]: SOCKS5
+Proxy host: 127.0.0.1
+Proxy port [1080]: 1080
+Use authentication? (yes/no) [no]: no
+✓ Proxy configured successfully!
+
+# View proxy status
+telertx> /proxy info
+
+# Enable/disable proxy
+telertx> /proxy enable
+telertx> /proxy disable
+```
 
 ## Session Management
 

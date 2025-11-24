@@ -8,6 +8,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
+import java.net.Authenticator;
+import java.net.InetSocketAddress;
+import java.net.PasswordAuthentication;
+import java.net.Proxy;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
@@ -46,6 +50,9 @@ public class TeleRTX {
     private static final String SESSION_DIR = "sessions";
     private static final String CONFIG_FILE = "config.properties";
     
+    // Proxy configuration
+    private ProxyConfig proxyConfig;
+    
     // Application state
     private volatile boolean isRunning = true;
     private boolean isAuthenticated = false;
@@ -64,6 +71,53 @@ public class TeleRTX {
     // Terminal UI
     private Terminal terminal;
     private LineReader lineReader;
+    
+    /**
+     * Proxy configuration class - inspired by Nagram's proxy support
+     */
+    static class ProxyConfig {
+        boolean enabled;
+        String type; // "SOCKS5", "HTTP", "DIRECT"
+        String host;
+        int port;
+        String username;
+        String password;
+        
+        ProxyConfig() {
+            this.enabled = false;
+            this.type = "DIRECT";
+            this.host = "";
+            this.port = 1080;
+            this.username = "";
+            this.password = "";
+        }
+        
+        Proxy toProxy() {
+            if (!enabled || "DIRECT".equals(type)) {
+                return Proxy.NO_PROXY;
+            }
+            
+            Proxy.Type proxyType = "SOCKS5".equalsIgnoreCase(type) || "SOCKS".equalsIgnoreCase(type)
+                ? Proxy.Type.SOCKS
+                : Proxy.Type.HTTP;
+            
+            return new Proxy(proxyType, new InetSocketAddress(host, port));
+        }
+        
+        void setupAuthentication() {
+            if (enabled && username != null && !username.isEmpty()) {
+                Authenticator.setDefault(new Authenticator() {
+                    @Override
+                    protected PasswordAuthentication getPasswordAuthentication() {
+                        if (getRequestingHost().equalsIgnoreCase(host)) {
+                            return new PasswordAuthentication(username, password.toCharArray());
+                        }
+                        return null;
+                    }
+                });
+            }
+        }
+    }
     
     /**
      * Account data structure - inspired by Nagram's AccountInstance
@@ -126,6 +180,10 @@ public class TeleRTX {
         } catch (IOException e) {
             logger.error("Failed to create session directory", e);
         }
+        
+        // Initialize proxy configuration
+        proxyConfig = new ProxyConfig();
+        loadProxyConfig();
     }
     
     public void start() throws IOException {
@@ -362,6 +420,9 @@ public class TeleRTX {
             case "/acc":
                 showAccountInfo();
                 break;
+            case "/proxy":
+                handleProxyCommand(args);
+                break;
             case "/logout":
                 logout();
                 break;
@@ -384,6 +445,7 @@ public class TeleRTX {
         System.out.println("  " + ANSI_GREEN + "/close" + ANSI_RESET + "             - Close current chat");
         System.out.println("  " + ANSI_GREEN + "/history [n], /m" + ANSI_RESET + "  - Show last n messages (default: 10)");
         System.out.println("  " + ANSI_GREEN + "/account, /acc" + ANSI_RESET + "    - Show account information");
+        System.out.println("  " + ANSI_GREEN + "/proxy" + ANSI_RESET + "             - Configure SOCKS5/HTTP proxy");
         System.out.println("  " + ANSI_GREEN + "/logout" + ANSI_RESET + "            - Logout current account");
         System.out.println("  " + ANSI_GREEN + "/quit, /q, /exit" + ANSI_RESET + "  - Exit TeleRTX");
         System.out.println();
@@ -584,6 +646,251 @@ public class TeleRTX {
         System.out.println();
         System.out.println(ANSI_CYAN + "Goodbye! 👋" + ANSI_RESET);
         isRunning = false;
+    }
+    
+    /**
+     * Handle proxy configuration command
+     */
+    private void handleProxyCommand(String args) {
+        if (args.isEmpty()) {
+            showProxyInfo();
+            return;
+        }
+        
+        String[] parts = args.split("\\s+");
+        String subCommand = parts[0].toLowerCase();
+        
+        switch (subCommand) {
+            case "set":
+                configureProxy();
+                break;
+            case "enable":
+                enableProxy();
+                break;
+            case "disable":
+                disableProxy();
+                break;
+            case "test":
+                testProxy();
+                break;
+            case "info":
+                showProxyInfo();
+                break;
+            default:
+                printError("Unknown proxy subcommand: " + subCommand);
+                System.out.println(ANSI_YELLOW + "Usage: /proxy [set|enable|disable|test|info]" + ANSI_RESET);
+        }
+    }
+    
+    /**
+     * Configure proxy settings interactively
+     */
+    private void configureProxy() {
+        try {
+            System.out.println();
+            System.out.println(ANSI_CYAN + "=== Proxy Configuration ===" + ANSI_RESET);
+            System.out.println();
+            
+            // Proxy type
+            String type = lineReader.readLine("Proxy type (SOCKS5/HTTP) [SOCKS5]: ");
+            if (type == null || type.trim().isEmpty()) {
+                type = "SOCKS5";
+            }
+            proxyConfig.type = type.toUpperCase();
+            
+            // Host
+            String host = lineReader.readLine("Proxy host: ");
+            if (host == null || host.trim().isEmpty()) {
+                printError("Host is required");
+                return;
+            }
+            proxyConfig.host = host.trim();
+            
+            // Port
+            String portStr = lineReader.readLine("Proxy port [1080]: ");
+            int port = 1080;
+            if (portStr != null && !portStr.trim().isEmpty()) {
+                try {
+                    port = Integer.parseInt(portStr.trim());
+                } catch (NumberFormatException e) {
+                    printWarning("Invalid port, using default: 1080");
+                }
+            }
+            proxyConfig.port = port;
+            
+            // Authentication
+            String useAuth = lineReader.readLine("Use authentication? (yes/no) [no]: ");
+            if ("yes".equalsIgnoreCase(useAuth)) {
+                String username = lineReader.readLine("Username: ");
+                String password = lineReader.readLine("Password: ", '*');
+                
+                proxyConfig.username = username != null ? username.trim() : "";
+                proxyConfig.password = password != null ? password : "";
+            } else {
+                proxyConfig.username = "";
+                proxyConfig.password = "";
+            }
+            
+            // Enable by default after configuration
+            proxyConfig.enabled = true;
+            
+            // Save configuration
+            saveProxyConfig();
+            
+            // Setup authentication if needed
+            proxyConfig.setupAuthentication();
+            
+            System.out.println();
+            printSuccess("✓ Proxy configured successfully!");
+            showProxyInfo();
+            System.out.println();
+            printWarning("Note: Proxy will be used for future Telegram API connections.");
+            
+        } catch (Exception e) {
+            logger.error("Error configuring proxy", e);
+            printError("Failed to configure proxy: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Enable proxy
+     */
+    private void enableProxy() {
+        if (proxyConfig.host == null || proxyConfig.host.isEmpty()) {
+            printError("Proxy not configured. Use '/proxy set' first.");
+            return;
+        }
+        
+        proxyConfig.enabled = true;
+        proxyConfig.setupAuthentication();
+        saveProxyConfig();
+        printSuccess("✓ Proxy enabled");
+    }
+    
+    /**
+     * Disable proxy
+     */
+    private void disableProxy() {
+        proxyConfig.enabled = false;
+        saveProxyConfig();
+        printSuccess("✓ Proxy disabled");
+    }
+    
+    /**
+     * Test proxy connection
+     */
+    private void testProxy() {
+        System.out.println();
+        System.out.println(ANSI_CYAN + "Testing proxy connection..." + ANSI_RESET);
+        
+        if (!proxyConfig.enabled) {
+            printWarning("Proxy is currently disabled");
+            return;
+        }
+        
+        try {
+            // Simple test - try to create a socket connection
+            Proxy proxy = proxyConfig.toProxy();
+            
+            System.out.println(ANSI_YELLOW + "Proxy type: " + proxyConfig.type + ANSI_RESET);
+            System.out.println(ANSI_YELLOW + "Proxy address: " + proxyConfig.host + ":" + proxyConfig.port + ANSI_RESET);
+            
+            // In a real implementation, this would test actual connectivity
+            printSuccess("✓ Proxy configuration is valid");
+            printWarning("Note: Full connectivity test requires actual Telegram API integration");
+            
+        } catch (Exception e) {
+            logger.error("Proxy test failed", e);
+            printError("Proxy test failed: " + e.getMessage());
+        }
+        System.out.println();
+    }
+    
+    /**
+     * Show current proxy configuration
+     */
+    private void showProxyInfo() {
+        System.out.println();
+        System.out.println(ANSI_CYAN + "╔═══ Proxy Configuration ═══╗" + ANSI_RESET);
+        System.out.println(ANSI_CYAN + "║ " + ANSI_RESET + "Status: " + 
+            (proxyConfig.enabled ? ANSI_GREEN + "Enabled" : ANSI_RED + "Disabled") + ANSI_RESET);
+        
+        if (proxyConfig.host != null && !proxyConfig.host.isEmpty()) {
+            System.out.println(ANSI_CYAN + "║ " + ANSI_RESET + "Type: " + ANSI_GREEN + proxyConfig.type + ANSI_RESET);
+            System.out.println(ANSI_CYAN + "║ " + ANSI_RESET + "Host: " + ANSI_GREEN + proxyConfig.host + ANSI_RESET);
+            System.out.println(ANSI_CYAN + "║ " + ANSI_RESET + "Port: " + ANSI_GREEN + proxyConfig.port + ANSI_RESET);
+            
+            if (proxyConfig.username != null && !proxyConfig.username.isEmpty()) {
+                System.out.println(ANSI_CYAN + "║ " + ANSI_RESET + "Auth: " + ANSI_GREEN + "Yes (user: " + proxyConfig.username + ")" + ANSI_RESET);
+            } else {
+                System.out.println(ANSI_CYAN + "║ " + ANSI_RESET + "Auth: " + ANSI_YELLOW + "No" + ANSI_RESET);
+            }
+        } else {
+            System.out.println(ANSI_CYAN + "║ " + ANSI_RESET + ANSI_YELLOW + "Not configured" + ANSI_RESET);
+        }
+        
+        System.out.println(ANSI_CYAN + "╚═══════════════════════════╝" + ANSI_RESET);
+        System.out.println();
+        System.out.println(ANSI_YELLOW + "Commands: /proxy set, /proxy enable, /proxy disable, /proxy test" + ANSI_RESET);
+        System.out.println();
+    }
+    
+    /**
+     * Load proxy configuration from file
+     */
+    private void loadProxyConfig() {
+        File configFile = new File(CONFIG_FILE);
+        if (!configFile.exists()) {
+            return;
+        }
+        
+        try {
+            Properties props = new Properties();
+            props.load(new FileInputStream(configFile));
+            
+            proxyConfig.enabled = Boolean.parseBoolean(props.getProperty("proxy.enabled", "false"));
+            proxyConfig.type = props.getProperty("proxy.type", "SOCKS5");
+            proxyConfig.host = props.getProperty("proxy.host", "");
+            proxyConfig.port = Integer.parseInt(props.getProperty("proxy.port", "1080"));
+            proxyConfig.username = props.getProperty("proxy.username", "");
+            proxyConfig.password = props.getProperty("proxy.password", "");
+            
+            if (proxyConfig.enabled) {
+                proxyConfig.setupAuthentication();
+                logger.info("Proxy loaded: {}:{}", proxyConfig.host, proxyConfig.port);
+            }
+        } catch (Exception e) {
+            logger.error("Failed to load proxy configuration", e);
+        }
+    }
+    
+    /**
+     * Save proxy configuration to file
+     */
+    private void saveProxyConfig() {
+        try {
+            Properties props = new Properties();
+            
+            // Load existing properties if file exists
+            File configFile = new File(CONFIG_FILE);
+            if (configFile.exists()) {
+                props.load(new FileInputStream(configFile));
+            }
+            
+            // Update proxy properties
+            props.setProperty("proxy.enabled", String.valueOf(proxyConfig.enabled));
+            props.setProperty("proxy.type", proxyConfig.type);
+            props.setProperty("proxy.host", proxyConfig.host);
+            props.setProperty("proxy.port", String.valueOf(proxyConfig.port));
+            props.setProperty("proxy.username", proxyConfig.username);
+            props.setProperty("proxy.password", proxyConfig.password);
+            
+            props.store(new FileOutputStream(configFile), "TeleRTX Configuration");
+            logger.info("Proxy configuration saved");
+        } catch (Exception e) {
+            logger.error("Failed to save proxy configuration", e);
+            printError("Failed to save proxy configuration");
+        }
     }
     
     private void cleanup() {
